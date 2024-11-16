@@ -1,0 +1,1 @@
+clang list.c -o list.elf && ./list.elf
