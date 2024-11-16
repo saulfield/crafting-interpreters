@@ -1,9 +1,6 @@
 /*
 Solution for chapter 1, exercise 3 (https://craftinginterpreters.com/introduction.html#challenges)
 
-"To get some practice with pointers, define a doubly linked list of heap-allocated strings.
-Write functions to insert, find, and delete items from it. Test them."
-
 To run:
 clang list.c -o list.elf && ./list.elf
 
