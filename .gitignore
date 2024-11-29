@@ -1,2 +1,4 @@
-plox/.venv/
+.vscode/
+.venv/
 *.elf
+*.pyc
