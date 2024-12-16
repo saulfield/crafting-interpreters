@@ -1,4 +1,7 @@
 .vscode/
 .venv/
 *.elf
+*.o
 *.pyc
+fuzz.lox
+zlox/main
