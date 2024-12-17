@@ -193,18 +193,45 @@ pub const Scanner = struct {
         self.addToken(KEYWORDS.get(str) orelse TokenKind.IDENTIFIER);
     }
 
+    fn scanComment(self: *Scanner) void {
+        if (self.match('/')) {
+            while (self.peek() != '\n' and !self.isAtEnd())
+                self.advance();
+            return;
+        }
+        if (self.match('*')) {
+            while (self.peek() != '*' and !self.isAtEnd()) {
+                if (self.peek() == '\n') self.line += 1;
+                if (self.match('/') and self.peek() == '*') {
+                    self.scanComment();
+                } else self.advance();
+            }
+            if (self.isAtEnd()) {
+                Lox.reportError(self.line, "Unterminated comment.");
+                return;
+            }
+            if (!self.match('*')) {
+                Lox.reportError(self.line, "Expected closing '*'");
+                self.advance();
+            }
+            if (!self.match('/')) {
+                Lox.reportError(self.line, "Expected closing '/'");
+                self.advance();
+            }
+        }
+    }
+
     fn scanToken(self: *Scanner) void {
         const c = self.next();
         switch (c) {
             ' ', '\r', '\t' => return,
             '\n' => self.line += 1,
             '/' => {
-                if (self.match('/')) {
-                    while (self.peek() != '\n' and !self.isAtEnd())
-                        self.advance();
-                } else {
+                const c_next = self.peek();
+                if (c_next == '/' or c_next == '*')
+                    self.scanComment()
+                else
                     self.addToken(TokenKind.SLASH);
-                }
             },
             '(' => self.addToken(TokenKind.LEFT_PAREN),
             ')' => self.addToken(TokenKind.RIGHT_PAREN),
@@ -269,4 +296,20 @@ test {
     const tokens = testInput(".1");
     try expect(tokens[0].kind == TokenKind.DOT);
     try expect(tokens[1].kind == TokenKind.NUMBER);
+
+    const comment_str =
+        \\/* comment */
+        \\
+        \\/*
+        \\    multiline 
+        \\    comment
+        \\*/
+        \\
+        \\/* 
+        \\    /*
+        \\        // nested
+        \\    */
+        \\*/
+    ;
+    try expect(testInput(comment_str)[0].kind == TokenKind.EOF);
 }

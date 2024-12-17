@@ -30,7 +30,7 @@ sys	    0m0.920s
 ```sh
 # Zig
 zig build-exe main.zig -O ReleaseSafe -fstrip -fsingle-threaded
-time ./main ../tests/fuzz.lox 
+time ./main ../tests/fuzz.lox
 
 real	0m0.875s
 user	0m0.442s

@@ -1,3 +1,16 @@
+/* comment */
+
+/*
+    multiline 
+    comment
+*/
+
+/* 
+    /*
+        // nested
+    */
+*/
+
 // this is a comment
 (( )){} // grouping stuff
 !*+-/=<> <= == // operators
