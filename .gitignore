@@ -5,3 +5,4 @@
 *.pyc
 fuzz.lox
 zlox/main
+olox/_build/

@@ -1,0 +1,6 @@
+(library
+ (name olox)
+ (public_name olox)
+ (modules :standard)
+ (preprocess
+  (pps ppx_deriving.show)))

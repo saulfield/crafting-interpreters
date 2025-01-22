@@ -19,7 +19,11 @@ lox [script]
 ## Scanner (100MB file of random characters)
 
 ```sh
-hyperfine --runs 5 -n Zig "./zlox/main ./tests/fuzz.lox" -n Python "lox tests/fuzz.lox"
+hyperfine \ 
+  --runs 5 \ 
+  -n Python "lox tests/fuzz.lox" \ 
+  -n Zig    "./zlox/main tests/fuzz.lox" \ 
+  -n OCaml  "./olox/_build/default/bin/olox.exe tests/fuzz.lox"
 ```
 
 ```sh
