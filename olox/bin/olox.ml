@@ -1,18 +1,24 @@
 open Printf
 open Olox
+open Scanner
+open Ast
+open AstPrinter
 
-(* open Scanner *)
-open MutableScanner
+let print_ast () =
+  let expr =
+    EXPR_Binary
+      ( EXPR_Unary (UNOP_neg, EXPR_Literal (LIT_number 123.)),
+        BINOP_mul,
+        EXPR_Grouping (EXPR_Literal (LIT_number 45.67)) )
+  in
+  expr |> print_expr |> print_endline
 
 let run src =
   let scanner = make_scanner src in
   let tokens = scan_tokens scanner in
-
-  printf "%d tokens\n" (Queue.length tokens)
-(* Queue.iter (fun t -> printf "%s\n" (show_token_info t)) tokens *)
-
-(* printf "%d tokens\n" (List.length tokens) *)
-(* List.iter (fun t -> printf "%s\n" (show_token_info t)) tokens *)
+  Queue.iter (fun t -> printf "%s\n" (show_token_info t)) tokens;
+  printf "%d tokens\n" (Queue.length tokens);
+  print_ast ()
 
 let run_file filename =
   let ch = open_in_bin filename in

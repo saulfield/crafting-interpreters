@@ -1,6 +1,6 @@
 open OUnit2
 open Olox
-open MutableScanner
+open Scanner
 
 let pp_comma ppf () = Format.fprintf ppf ", "
 let pp_tok_list = Format.(pp_print_list ~pp_sep:pp_comma) Token.pp
