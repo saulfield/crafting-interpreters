@@ -9,16 +9,17 @@ const MAX_SIZE = std.math.maxInt(usize);
 fn run(allocator: Allocator, src: []const u8) !void {
     var scanner = Scanner.init(allocator, src);
     const tokens = scanner.scanTokens();
-    for (tokens) |token| {
-        try stdout.print("{any}", .{token.kind});
-        if (token.literal) |val| {
-            switch (val) {
-                .str => try stdout.print(" \"{s}\"", .{val.str}),
-                .num => try stdout.print(" {d}", .{val.num}),
-            }
-        }
-        try stdout.print("\n", .{});
-    }
+    try stdout.print("{d} tokens\n", .{tokens.len});
+    // for (tokens) |token| {
+    //     try stdout.print("{any}", .{token.kind});
+    //     if (token.literal) |val| {
+    //         switch (val) {
+    //             .str => try stdout.print(" \"{s}\"", .{val.str}),
+    //             .num => try stdout.print(" {d}", .{val.num}),
+    //         }
+    //     }
+    //     try stdout.print("\n", .{});
+    // }
 }
 
 fn runPrompt(allocator: Allocator) !void {

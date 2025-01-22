@@ -6,8 +6,9 @@ from plox.scanner import Scanner
 def run(src: str):
     scanner = Scanner(src)
     tokens = scanner.scan_tokens()
-    for token in tokens:
-        print(token)
+    print(f"{len(tokens)} tokens")
+    # for token in tokens:
+    #     print(token)
 
 
 def run_prompt():

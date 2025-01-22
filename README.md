@@ -19,20 +19,23 @@ lox [script]
 ## Scanner (100MB file of random characters)
 
 ```sh
-# Python
-time lox tests/fuzz.lox
-
-real	1m1.743s
-user	1m0.729s
-sys	    0m0.920s
+hyperfine --runs 5 -n Zig "./zlox/main ./tests/fuzz.lox" -n Python "lox tests/fuzz.lox"
 ```
 
 ```sh
-# Zig
-zig build-exe main.zig -O ReleaseSafe -fstrip -fsingle-threaded
-time ./main ../tests/fuzz.lox
+Benchmark 1: Python
+  Time (mean ± σ):     62.312 s ±  2.315 s    [User: 61.307 s, System: 0.939 s]
+  Range (min … max):   60.169 s … 65.255 s    5 runs
 
-real	0m0.875s
-user	0m0.442s
-sys	    0m0.430s
+Benchmark 2: Zig
+  Time (mean ± σ):     860.5 ms ±   7.1 ms    [User: 439.5 ms, System: 417.0 ms]
+  Range (min … max):   855.2 ms … 872.0 ms    5 runs
+
+Benchmark 3: OCaml (compiled, immutable)
+  Time (mean ± σ):      3.322 s ±  0.020 s    [User: 2.679 s, System: 0.636 s]
+  Range (min … max):    3.292 s …  3.343 s    5 runs
+
+Benchmark 4: OCaml (compiled, mutable)
+  Time (mean ± σ):      2.796 s ±  0.014 s    [User: 2.234 s, System: 0.556 s]
+  Range (min … max):    2.773 s …  2.810 s    5 runs
 ```
