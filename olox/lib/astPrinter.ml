@@ -1,7 +1,11 @@
 open Ast
 
 let print_literal lit =
-  match lit with LIT_number num -> string_of_float num | LIT_string str -> str
+  match lit with
+  | LIT_number num -> string_of_float num
+  | LIT_string str -> str
+  | LIT_bool b -> string_of_bool b
+  | LIT_nil -> "nil"
 
 let rec print_expr (expr : expr) : string =
   match expr with
