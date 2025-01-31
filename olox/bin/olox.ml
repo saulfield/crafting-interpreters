@@ -2,6 +2,7 @@ open Printf
 open Olox
 open Scanner
 open Parser
+open Interpreter
 
 let run src =
   let scanner = make_scanner src in
@@ -9,7 +10,8 @@ let run src =
   let parser = make_parser tokens in
   let ast = parse parser in
   match ast with
-  | Some expr -> expr |> AstPrinter.print_expr |> print_endline
+  (* | Some expr -> expr |> AstPrinter.print_expr |> print_endline *)
+  | Some expr -> expr |> eval |> string_of_value |> print_endline
   | None -> ()
 
 let run_file filename =
