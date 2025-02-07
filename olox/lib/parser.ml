@@ -39,7 +39,10 @@ let match_tokens parser toks =
 
 Grammar
 -------
-
+program    → statement* EOF ;
+statement  → exprStmt | printStmt ;
+exprStmt   → expression ";" ;
+printStmt  → "print" expression ";" ;
 expression → equality ;
 equality   → comparison ( ( "!=" | "==" ) comparison )* ;
 comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
@@ -129,7 +132,28 @@ and parse_primary parser =
       parser_error parser "Expect expression.";
       failwith "Parse error"
 
-let parse parser = try Some (parse_expr parser) with Failure _ -> None
+(* printStmt → "print" expression ";" ; *)
+let parse_print_stmt parser =
+  let expr = parse_expr parser in
+  let _ = consume parser Token.Semicolon "Expect ';' after value." in
+  STMT_Print expr
+
+(* exprStmt → expression ";" ; *)
+let parse_expr_stmt parser =
+  let expr = parse_expr parser in
+  let _ = consume parser Token.Semicolon "Expect ';' after expression." in
+  STMT_Expression expr
+
+(* statement → exprStmt | printStmt ; *)
+let parse_stmt parser =
+  if match_tokens parser [ Token.KWPrint ] then parse_print_stmt parser else parse_expr_stmt parser
+
+(* program → statement* EOF ; *)
+let parse parser =
+  let rec step stmts =
+    if parser.peek.token = Token.EOF then stmts else step (parse_stmt parser :: stmts)
+  in
+  try List.rev (step []) with Failure _e -> []
 
 let _synchronize parser =
   advance parser;

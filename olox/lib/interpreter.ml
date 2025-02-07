@@ -1,3 +1,4 @@
+open Printf
 open Ast
 
 type value = Nil | Bool of bool | Number of float | String of string [@@deriving show]
@@ -35,15 +36,15 @@ let eval_literal lit =
   | LIT_number n -> Number n
   | LIT_string s -> String s
 
-let rec eval expr =
+let rec eval_expr expr =
   match expr with
   | EXPR_Literal lit -> eval_literal lit
-  | EXPR_Grouping inner -> eval inner
+  | EXPR_Grouping inner -> eval_expr inner
   | EXPR_Binary (lhs, op, rhs) -> eval_binary lhs op rhs
   | EXPR_Unary (op, inner) -> eval_unary op inner
 
 and eval_unary op expr =
-  let v = eval expr in
+  let v = eval_expr expr in
   match op with
   | UNOP_neg -> Number (Float.neg (check_num v))
   | UNOP_not -> Bool (not (is_truthy v))
@@ -54,14 +55,16 @@ and eval_add lval rval =
   match (lval, rval) with
   | Number lnum, Number rnum -> Number (Float.add lnum rnum)
   | String lstr, String rstr -> String (lstr ^ rstr)
+  | String lstr, other -> String (lstr ^ string_of_value other)
+  | other, String rstr -> String (string_of_value other ^ rstr)
   | left, right ->
       failwith
-        (Printf.sprintf "Operands must be of same type (left=%s, right=%s)" (string_of_value left)
+        (sprintf "Operands must be of same type (left=%s, right=%s)" (string_of_value left)
            (string_of_value right))
 
 and eval_binary lhs op rhs =
-  let lval = eval lhs in
-  let rval = eval rhs in
+  let lval = eval_expr lhs in
+  let rval = eval_expr rhs in
   match op with
   | BINOP_add -> eval_add lval rval
   | BINOP_sub -> Number (num_op Float.sub lval rval)
@@ -73,3 +76,15 @@ and eval_binary lhs op rhs =
   | BINOP_le -> Bool (check_num lval <= check_num lval)
   | BINOP_eq -> Bool (is_equal lval rval)
   | BINOP_ne -> Bool (not (is_equal lval rval))
+
+let eval_stmt stmt =
+  match stmt with
+  | STMT_Expression expr -> eval_expr expr |> ignore
+  | STMT_Print expr -> expr |> eval_expr |> string_of_value |> print_endline
+
+let rec interpret stmts =
+  match stmts with
+  | stmt :: rest ->
+      (try eval_stmt stmt with Failure e -> Common.runtime_error e 1);
+      interpret rest
+  | [] -> ()

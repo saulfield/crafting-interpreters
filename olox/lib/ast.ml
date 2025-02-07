@@ -23,6 +23,8 @@ type expr =
   | EXPR_Unary of unop * expr
 [@@deriving show]
 
+type stmt = STMT_Expression of expr | STMT_Print of expr
+
 (* Conversion *)
 
 let binop_of_tok tok =

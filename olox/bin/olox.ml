@@ -8,11 +8,8 @@ let run src =
   let scanner = make_scanner src in
   let tokens = scan_tokens scanner in
   let parser = make_parser tokens in
-  let ast = parse parser in
-  match ast with
-  (* | Some expr -> expr |> AstPrinter.print_expr |> print_endline *)
-  | Some expr -> expr |> eval |> string_of_value |> print_endline
-  | None -> ()
+  let stmts = parse parser in
+  interpret stmts |> ignore
 
 let run_file filename =
   let ch = open_in_bin filename in
