@@ -1,4 +1,8 @@
-type literal = LIT_string of string | LIT_number of float | LIT_bool of bool | LIT_nil
+type literal =
+  | LIT_string of string
+  | LIT_number of float
+  | LIT_bool of bool
+  | LIT_nil
 [@@deriving show]
 
 type unop = UNOP_neg | UNOP_not [@@deriving show]
@@ -17,13 +21,19 @@ type binop =
 [@@deriving show]
 
 type expr =
+  | EXPR_Assign of string * expr
   | EXPR_Binary of expr * binop * expr
   | EXPR_Grouping of expr
   | EXPR_Literal of literal
   | EXPR_Unary of unop * expr
+  | EXPR_Variable of string
 [@@deriving show]
 
-type stmt = STMT_Expression of expr | STMT_Print of expr
+type stmt =
+  | STMT_Block of stmt list
+  | STMT_Expression of expr
+  | STMT_Print of expr
+  | STMT_Var of string * expr option
 
 (* Conversion *)
 

@@ -18,10 +18,12 @@ let advance parser =
     parser.prev <- Queue.pop parser.tokens;
     parser.peek <- Queue.peek parser.tokens)
 
-let check parser tok = if parser.peek.token = Token.EOF then false else parser.peek.token = tok
+let check parser tok =
+  if parser.peek.token = Token.EOF then false else parser.peek.token = tok
 
 let parser_error parser message =
-  Common.token_error parser.peek.token parser.peek.line parser.peek.lexeme message
+  Common.token_error parser.peek.token parser.peek.line parser.peek.lexeme
+    message
 
 let consume parser token message =
   if check parser token then advance parser
@@ -39,24 +41,45 @@ let match_tokens parser toks =
 
 Grammar
 -------
-program    → statement* EOF ;
-statement  → exprStmt | printStmt ;
-exprStmt   → expression ";" ;
-printStmt  → "print" expression ";" ;
-expression → equality ;
-equality   → comparison ( ( "!=" | "==" ) comparison )* ;
-comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-term       → factor ( ( "-" | "+" ) factor )* ;
-factor     → unary ( ( "/" | "*" ) unary )* ;
-unary      → ( "!" | "-" ) unary | primary ;
-primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
+program     → declaration* EOF ;
+
+declaration → varDecl | statement ;
+varDecl     → "var" IDENTIFIER ( "=" expression )? ";" ;
+statement   → exprStmt | printStmt | block ;
+exprStmt    → expression ";" ;
+printStmt   → "print" expression ";" ;
+block       → "{" declaration* "}" ;
+
+expression  → assignment ;
+assignment  → IDENTIFIER "=" assignment | equality ;
+equality    → comparison ( ( "!=" | "==" ) comparison )* ;
+comparison  → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+term        → factor ( ( "-" | "+" ) factor )* ;
+factor      → unary ( ( "/" | "*" ) unary )* ;
+unary       → ( "!" | "-" ) unary | primary ;
+primary     → "true" | "false" | "nil"
+            | NUMBER | STRING
+            | "(" expression ")"
+            | IDENTIFIER ;
 
 *)
 
 (* Parsing actions *)
 
-(* expression → equality ; *)
-let rec parse_expr parser = parse_equality parser
+(* expression → assignment ; *)
+let rec parse_expr parser = parse_assign parser
+
+(* assignment → IDENTIFIER "=" assignment | equality ; *)
+and parse_assign parser =
+  let expr = parse_equality parser in
+  if match_tokens parser [ Token.Equal ] then (
+    let rval = parse_assign parser in
+    match expr with
+    | EXPR_Variable name -> EXPR_Assign (name, rval)
+    | _ ->
+        parser_error parser "Invalid assignment target.";
+        expr)
+  else expr
 
 (* equality → comparison ( ( "!=" | "==" ) comparison )* ; *)
 and parse_equality parser =
@@ -74,7 +97,10 @@ and parse_equality parser =
 and parse_comparison parser =
   let lhs = parse_term parser in
   let rec step parser lhs =
-    if match_tokens parser [ Token.Greater; Token.GreaterEqual; Token.Less; Token.LessEqual ] then
+    if
+      match_tokens parser
+        [ Token.Greater; Token.GreaterEqual; Token.Less; Token.LessEqual ]
+    then
       let op = binop_of_tok parser.prev.token in
       let rhs = parse_term parser in
       step parser (EXPR_Binary (lhs, op, rhs))
@@ -128,30 +154,67 @@ and parse_primary parser =
       let expr = parse_expr parser in
       consume parser Token.RightParen "Expect ')' after expression.";
       expr
+  | Token.Identifier s -> EXPR_Variable s
   | _ ->
       parser_error parser "Expect expression.";
       failwith "Parse error"
 
+(* statement → exprStmt | printStmt | block ; *)
+let rec parse_stmt parser =
+  if match_tokens parser [ Token.KWPrint ] then parse_print_stmt parser
+  else if match_tokens parser [ Token.LeftBrace ] then
+    STMT_Block (parse_block parser)
+  else parse_expr_stmt parser
+
 (* printStmt → "print" expression ";" ; *)
-let parse_print_stmt parser =
+and parse_print_stmt parser =
   let expr = parse_expr parser in
   let _ = consume parser Token.Semicolon "Expect ';' after value." in
   STMT_Print expr
 
+(* block → "{" declaration* "}" ; *)
+and parse_block parser =
+  let rec step stmts =
+    match parser.peek.token with
+    | Token.RightBrace | Token.EOF -> stmts
+    | _ -> step (parse_declaration parser :: stmts)
+  in
+  let stmts = step [] in
+  let _ = consume parser Token.RightBrace "Expect '}' after block." in
+  List.rev stmts
+
 (* exprStmt → expression ";" ; *)
-let parse_expr_stmt parser =
+and parse_expr_stmt parser =
   let expr = parse_expr parser in
   let _ = consume parser Token.Semicolon "Expect ';' after expression." in
   STMT_Expression expr
 
-(* statement → exprStmt | printStmt ; *)
-let parse_stmt parser =
-  if match_tokens parser [ Token.KWPrint ] then parse_print_stmt parser else parse_expr_stmt parser
+(* varDecl → "var" IDENTIFIER ( "=" expression )? ";" ; *)
+and parse_var_decl parser =
+  let ident =
+    match parser.peek.token with
+    | Token.Identifier s ->
+        advance parser;
+        s
+    | _ -> failwith "Expect variable name."
+  in
+  let init_expr =
+    if match_tokens parser [ Token.Equal ] then Some (parse_expr parser)
+    else None
+  in
+  consume parser Token.Semicolon "Expect ';' after variable declaration.";
+  STMT_Var (ident, init_expr)
 
-(* program → statement* EOF ; *)
+(* declaration → varDecl | statement ; *)
+and parse_declaration parser =
+  if match_tokens parser [ Token.KWVar ] then parse_var_decl parser
+  else parse_stmt parser
+
+(* program → declaration* EOF ; *)
 let parse parser =
   let rec step stmts =
-    if parser.peek.token = Token.EOF then stmts else step (parse_stmt parser :: stmts)
+    if parser.peek.token = Token.EOF then stmts
+    else step (parse_declaration parser :: stmts)
   in
   try List.rev (step []) with Failure _e -> []
 
@@ -161,8 +224,8 @@ let _synchronize parser =
     if parser.prev.token = Token.Semicolon then ()
     else
       match parser.peek.token with
-      | Token.EOF | Token.KWClass | Token.KWFun | Token.KWVar | Token.KWFor | Token.KWIf
-      | Token.KWWhile | Token.KWPrint | Token.KWReturn ->
+      | Token.EOF | Token.KWClass | Token.KWFun | Token.KWVar | Token.KWFor
+      | Token.KWIf | Token.KWWhile | Token.KWPrint | Token.KWReturn ->
           ()
       | _ ->
           advance parser;
