@@ -45,7 +45,7 @@ program     → declaration* EOF ;
 
 declaration → varDecl | statement ;
 varDecl     → "var" IDENTIFIER ( "=" expression )? ";" ;
-statement   → exprStmt | forStmt | ifStmt | whileStmt| printStmt | block ;
+statement   → exprStmt | forStmt | ifStmt | whileStmt | printStmt | block ;
 exprStmt    → expression ";" ;
 forStmt     → "for" "(" ( varDecl | exprStmt | ";" )
             expression? ";"
@@ -193,6 +193,9 @@ and parse_primary parser =
 (* statement → exprStmt | forStmt | ifStmt | whileStmt| printStmt | block ; *)
 let rec parse_stmt parser =
   if match_tokens parser [ Token.KWPrint ] then parse_print_stmt parser
+  else if match_tokens parser [ Token.KWBreak ] then
+    let _ = consume parser Token.Semicolon "Expect ';' after break." in
+    STMT_Break
   else if match_tokens parser [ Token.KWFor ] then parse_for_stmt parser
   else if match_tokens parser [ Token.KWIf ] then parse_if_stmt parser
   else if match_tokens parser [ Token.KWWhile ] then parse_while_stmt parser

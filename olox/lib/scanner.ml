@@ -1,4 +1,5 @@
-type token_info = { token : Token.t; lexeme : string; line : int } [@@deriving show]
+type token_info = { token : Token.t; lexeme : string; line : int }
+[@@deriving show]
 
 type scanner = {
   src : string;
@@ -26,18 +27,25 @@ let get_identifier (s : string) : Token.t =
   | "true" -> KWTrue
   | "var" -> KWVar
   | "while" -> KWWhile
+  | "break" -> KWBreak
   | s -> Identifier s
 
-let make_scanner src = { src; tokens = Queue.create (); start = 0; current = 0; line = 1 }
+let make_scanner src =
+  { src; tokens = Queue.create (); start = 0; current = 0; line = 1 }
 
 let add_token scanner token =
   let line = scanner.line in
-  let lexeme = String.sub scanner.src scanner.start (scanner.current - scanner.start) in
+  let lexeme =
+    String.sub scanner.src scanner.start (scanner.current - scanner.start)
+  in
   let token_info = { token; lexeme; line } in
   Queue.push token_info scanner.tokens
 
 let is_at_end scanner = scanner.current >= String.length scanner.src
-let peek scanner = if is_at_end scanner then '\000' else scanner.src.[scanner.current]
+
+let peek scanner =
+  if is_at_end scanner then '\000' else scanner.src.[scanner.current]
+
 let advance scanner = scanner.current <- scanner.current + 1
 
 let match_char scanner c =
@@ -80,7 +88,9 @@ let scan_digits scanner =
 let scan_number scanner =
   scan_digits scanner;
   if match_char scanner '.' then scan_digits scanner;
-  let s = String.sub scanner.src scanner.start (scanner.current - scanner.start) in
+  let s =
+    String.sub scanner.src scanner.start (scanner.current - scanner.start)
+  in
   try
     let num_val = float_of_string s in
     add_token scanner (Number num_val)
@@ -92,7 +102,9 @@ let scan_identifier scanner =
   while is_alphanumeric (peek scanner) do
     advance scanner
   done;
-  let id = String.sub scanner.src scanner.start (scanner.current - scanner.start) in
+  let id =
+    String.sub scanner.src scanner.start (scanner.current - scanner.start)
+  in
   let token = get_identifier id in
   add_token scanner token
 
@@ -110,11 +122,18 @@ let scan_token scanner =
   | '+' -> add_token scanner Plus
   | ';' -> add_token scanner Semicolon
   | '*' -> add_token scanner Star
-  | '!' -> add_token scanner (if match_char scanner '=' then BangEqual else Bang)
-  | '=' -> add_token scanner (if match_char scanner '=' then EqualEqual else Equal)
-  | '<' -> add_token scanner (if match_char scanner '=' then LessEqual else Less)
-  | '>' -> add_token scanner (if match_char scanner '=' then GreaterEqual else Greater)
-  | '/' -> if peek scanner = '/' then scan_comment scanner else add_token scanner Slash
+  | '!' ->
+      add_token scanner (if match_char scanner '=' then BangEqual else Bang)
+  | '=' ->
+      add_token scanner (if match_char scanner '=' then EqualEqual else Equal)
+  | '<' ->
+      add_token scanner (if match_char scanner '=' then LessEqual else Less)
+  | '>' ->
+      add_token scanner
+        (if match_char scanner '=' then GreaterEqual else Greater)
+  | '/' ->
+      if peek scanner = '/' then scan_comment scanner
+      else add_token scanner Slash
   | ' ' | '\r' | '\t' -> ()
   | '\n' -> scanner.line <- scanner.line + 1
   | '"' -> scan_string scanner

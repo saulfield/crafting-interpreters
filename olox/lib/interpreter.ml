@@ -122,6 +122,8 @@ let eval_var_stmt env name init_expr =
   in
   env_define env name init_value |> ignore
 
+exception BreakException
+
 let rec eval_stmt env stmt =
   match stmt with
   | STMT_Block stmts ->
@@ -137,14 +139,17 @@ let rec eval_stmt env stmt =
         | None -> ())
   | STMT_While (condition, body) ->
       let rec step () =
-        if is_truthy (eval_expr env condition) then (
-          eval_stmt env body;
-          step ())
+        if is_truthy (eval_expr env condition) then
+          try
+            eval_stmt env body;
+            step ()
+          with BreakException -> ()
         else ()
       in
       step ()
   | STMT_Print expr -> expr |> eval_expr env |> string_of_value |> print_endline
   | STMT_Var (name, init_expr) -> eval_var_stmt env name init_expr
+  | STMT_Break -> raise BreakException
 
 let interpret stmts =
   let global_env = env_create None in

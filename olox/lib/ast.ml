@@ -36,6 +36,7 @@ type stmt =
   | STMT_Expression of expr
   | STMT_If of expr * stmt * stmt option
   | STMT_While of expr * stmt
+  | STMT_Break
   | STMT_Print of expr
   | STMT_Var of string * expr option
 [@@deriving show]

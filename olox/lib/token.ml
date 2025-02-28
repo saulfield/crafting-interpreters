@@ -41,6 +41,7 @@ type t =
   | KWTrue
   | KWVar
   | KWWhile
+  | KWBreak
   (* Special *)
   | EOF
 [@@deriving show]
