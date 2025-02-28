@@ -45,13 +45,22 @@ program     → declaration* EOF ;
 
 declaration → varDecl | statement ;
 varDecl     → "var" IDENTIFIER ( "=" expression )? ";" ;
-statement   → exprStmt | printStmt | block ;
+statement   → exprStmt | forStmt | ifStmt | whileStmt| printStmt | block ;
 exprStmt    → expression ";" ;
+forStmt     → "for" "(" ( varDecl | exprStmt | ";" )
+            expression? ";"
+            expression? ")" statement ;
+ifStmt      → "if" "(" expression ")" statement
+            ( "else" statement )? ;
+whileStmt   → "while" "(" expression ")" statement ;
 printStmt   → "print" expression ";" ;
 block       → "{" declaration* "}" ;
 
+
 expression  → assignment ;
-assignment  → IDENTIFIER "=" assignment | equality ;
+assignment  → IDENTIFIER "=" assignment | logic_or ;
+logic_or    → logic_and ( "or" logic_and )* ;
+logic_and   → equality ( "and" equality )* ;
 equality    → comparison ( ( "!=" | "==" ) comparison )* ;
 comparison  → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 term        → factor ( ( "-" | "+" ) factor )* ;
@@ -69,9 +78,9 @@ primary     → "true" | "false" | "nil"
 (* expression → assignment ; *)
 let rec parse_expr parser = parse_assign parser
 
-(* assignment → IDENTIFIER "=" assignment | equality ; *)
+(* assignment → IDENTIFIER "=" assignment | logic_or ; *)
 and parse_assign parser =
-  let expr = parse_equality parser in
+  let expr = parse_logic_or parser in
   if match_tokens parser [ Token.Equal ] then (
     let rval = parse_assign parser in
     match expr with
@@ -80,6 +89,28 @@ and parse_assign parser =
         parser_error parser "Invalid assignment target.";
         expr)
   else expr
+
+(* logic_or    → logic_and ( "or" logic_and )* ; *)
+and parse_logic_or parser =
+  let lhs = parse_logic_and parser in
+  let rec step parser lhs =
+    if match_tokens parser [ Token.KWOr ] then
+      let rhs = parse_logic_and parser in
+      step parser (EXPR_Logical (lhs, LOGOP_or, rhs))
+    else lhs
+  in
+  step parser lhs
+
+(* logic_and   → equality ( "and" equality )* ; *)
+and parse_logic_and parser =
+  let lhs = parse_equality parser in
+  let rec step parser lhs =
+    if match_tokens parser [ Token.KWAnd ] then
+      let rhs = parse_equality parser in
+      step parser (EXPR_Logical (lhs, LOGOP_and, rhs))
+    else lhs
+  in
+  step parser lhs
 
 (* equality → comparison ( ( "!=" | "==" ) comparison )* ; *)
 and parse_equality parser =
@@ -159,12 +190,77 @@ and parse_primary parser =
       parser_error parser "Expect expression.";
       failwith "Parse error"
 
-(* statement → exprStmt | printStmt | block ; *)
+(* statement → exprStmt | forStmt | ifStmt | whileStmt| printStmt | block ; *)
 let rec parse_stmt parser =
   if match_tokens parser [ Token.KWPrint ] then parse_print_stmt parser
+  else if match_tokens parser [ Token.KWFor ] then parse_for_stmt parser
+  else if match_tokens parser [ Token.KWIf ] then parse_if_stmt parser
+  else if match_tokens parser [ Token.KWWhile ] then parse_while_stmt parser
   else if match_tokens parser [ Token.LeftBrace ] then
     STMT_Block (parse_block parser)
   else parse_expr_stmt parser
+
+(* exprStmt → expression ";" ; *)
+and parse_expr_stmt parser =
+  let expr = parse_expr parser in
+  let _ = consume parser Token.Semicolon "Expect ';' after expression." in
+  STMT_Expression expr
+
+(* ifStmt → "if" "(" expression ")" statement ( "else" statement )? ; *)
+and parse_if_stmt parser =
+  let _ = consume parser Token.LeftParen "Expect '(' after 'if'." in
+  let condition = parse_expr parser in
+  let _ = consume parser Token.RightParen "Expect ')' after if condition." in
+  let then_branch = parse_stmt parser in
+  let else_branch =
+    if match_tokens parser [ Token.KWElse ] then Some (parse_stmt parser)
+    else None
+  in
+  STMT_If (condition, then_branch, else_branch)
+
+(* forStmt → "for" "(" ( varDecl | exprStmt | ";" ) *)
+(* expression? ";" *)
+(* expression? ")" statement ; *)
+and parse_for_stmt parser =
+  let _ = consume parser Token.LeftParen "Expect '(' after 'for'." in
+  let init =
+    if match_tokens parser [ Token.Semicolon ] then None
+    else if match_tokens parser [ Token.KWVar ] then
+      Some (parse_var_decl parser)
+    else Some (parse_expr_stmt parser)
+  in
+  let condition =
+    if not (check parser Token.Semicolon) then Some (parse_expr parser)
+    else None
+  in
+  let _ = consume parser Token.Semicolon "Expect ';' after loop condition." in
+  let inc =
+    if not (check parser Token.RightParen) then Some (parse_expr parser)
+    else None
+  in
+  let _ = consume parser Token.RightParen "Expect ')' after for clauses." in
+  let body = parse_stmt parser in
+  let body =
+    match inc with
+    | Some expr -> STMT_Block [ body; STMT_Expression expr ]
+    | None -> body
+  in
+  let body =
+    match condition with
+    | Some expr -> STMT_While (expr, body)
+    | None -> STMT_While (EXPR_Literal (LIT_bool true), body)
+  in
+  match init with
+  | Some stmt -> STMT_Block [ stmt; body ]
+  | None -> body
+
+(* whileStmt → "while" "(" expression ")" statement ; *)
+and parse_while_stmt parser =
+  let _ = consume parser Token.LeftParen "Expect '(' after 'while'." in
+  let condition = parse_expr parser in
+  let _ = consume parser Token.RightParen "Expect ')' after while condition." in
+  let body = parse_stmt parser in
+  STMT_While (condition, body)
 
 (* printStmt → "print" expression ";" ; *)
 and parse_print_stmt parser =
@@ -182,12 +278,6 @@ and parse_block parser =
   let stmts = step [] in
   let _ = consume parser Token.RightBrace "Expect '}' after block." in
   List.rev stmts
-
-(* exprStmt → expression ";" ; *)
-and parse_expr_stmt parser =
-  let expr = parse_expr parser in
-  let _ = consume parser Token.Semicolon "Expect ';' after expression." in
-  STMT_Expression expr
 
 (* varDecl → "var" IDENTIFIER ( "=" expression )? ";" ; *)
 and parse_var_decl parser =

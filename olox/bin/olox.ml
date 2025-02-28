@@ -9,6 +9,7 @@ let run src =
   let tokens = scan_tokens scanner in
   let parser = make_parser tokens in
   let stmts = parse parser in
+  (* let _ = List.iter (fun stmt -> print_endline (Ast.show_stmt stmt)) stmts in *)
   interpret stmts |> ignore
 
 let run_file filename =

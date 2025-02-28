@@ -66,6 +66,7 @@ let rec eval_expr env expr =
   | EXPR_Literal lit -> eval_literal lit
   | EXPR_Grouping inner -> eval_expr env inner
   | EXPR_Binary (lhs, op, rhs) -> eval_binary env lhs op rhs
+  | EXPR_Logical (lhs, op, rhs) -> eval_logical env lhs op rhs
   | EXPR_Unary (op, inner) -> eval_unary env op inner
   | EXPR_Variable name -> env_get env name
   | EXPR_Assign (name, expr) ->
@@ -100,12 +101,18 @@ and eval_binary env lhs op rhs =
   | BINOP_sub -> Number (num_op Float.sub lval rval)
   | BINOP_div -> Number (num_op Float.div lval rval)
   | BINOP_mul -> Number (num_op Float.mul lval rval)
-  | BINOP_gt -> Bool (check_num lval > check_num lval)
-  | BINOP_ge -> Bool (check_num lval >= check_num lval)
-  | BINOP_lt -> Bool (check_num lval < check_num lval)
-  | BINOP_le -> Bool (check_num lval <= check_num lval)
+  | BINOP_gt -> Bool (check_num lval > check_num rval)
+  | BINOP_ge -> Bool (check_num lval >= check_num rval)
+  | BINOP_lt -> Bool (check_num lval < check_num rval)
+  | BINOP_le -> Bool (check_num lval <= check_num rval)
   | BINOP_eq -> Bool (is_equal lval rval)
   | BINOP_ne -> Bool (not (is_equal lval rval))
+
+and eval_logical env lhs op rhs =
+  let lval = eval_expr env lhs in
+  match op with
+  | LOGOP_or -> if is_truthy lval then lval else eval_expr env rhs
+  | LOGOP_and -> if not (is_truthy lval) then lval else eval_expr env rhs
 
 let eval_var_stmt env name init_expr =
   let init_value =
@@ -121,6 +128,21 @@ let rec eval_stmt env stmt =
       let new_env = env_create (Some env) in
       List.iter (eval_stmt new_env) stmts
   | STMT_Expression expr -> eval_expr env expr |> ignore
+  | STMT_If (condition, then_branch, else_branch) -> (
+      let c = eval_expr env condition in
+      if is_truthy c then eval_stmt env then_branch
+      else
+        match else_branch with
+        | Some stmt -> eval_stmt env stmt
+        | None -> ())
+  | STMT_While (condition, body) ->
+      let rec step () =
+        if is_truthy (eval_expr env condition) then (
+          eval_stmt env body;
+          step ())
+        else ()
+      in
+      step ()
   | STMT_Print expr -> expr |> eval_expr env |> string_of_value |> print_endline
   | STMT_Var (name, init_expr) -> eval_var_stmt env name init_expr
 

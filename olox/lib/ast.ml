@@ -6,6 +6,7 @@ type literal =
 [@@deriving show]
 
 type unop = UNOP_neg | UNOP_not [@@deriving show]
+type logop = LOGOP_or | LOGOP_and [@@deriving show]
 
 type binop =
   | BINOP_eq
@@ -24,6 +25,7 @@ type expr =
   | EXPR_Assign of string * expr
   | EXPR_Binary of expr * binop * expr
   | EXPR_Grouping of expr
+  | EXPR_Logical of expr * logop * expr
   | EXPR_Literal of literal
   | EXPR_Unary of unop * expr
   | EXPR_Variable of string
@@ -32,8 +34,11 @@ type expr =
 type stmt =
   | STMT_Block of stmt list
   | STMT_Expression of expr
+  | STMT_If of expr * stmt * stmt option
+  | STMT_While of expr * stmt
   | STMT_Print of expr
   | STMT_Var of string * expr option
+[@@deriving show]
 
 (* Conversion *)
 
