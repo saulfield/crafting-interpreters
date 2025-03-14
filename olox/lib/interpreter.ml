@@ -1,14 +1,23 @@
 open Printf
 open Ast
 
-type value = Nil | Bool of bool | Number of float | String of string
+(* Values *)
+type value =
+  | Nil
+  | Bool of bool
+  | Number of float
+  | String of string
+  | Callable of callable
+
+(* Callable *)
+and callable = { arity : int; str : string; call : value list -> value }
 [@@deriving show]
 
+(* Environments *)
 type env = { parent : env option; values : (string, value) Hashtbl.t }
 
 let env_create parent = { parent; values = Hashtbl.create 16 }
-
-(* Environment *)
+let global_env = env_create None
 let env_define env name value = Hashtbl.add env.values name value
 
 let rec env_get env name =
@@ -34,6 +43,7 @@ let string_of_value v =
   | Bool b -> string_of_bool b
   | Number n -> string_of_float n
   | String s -> "\"" ^ s ^ "\""
+  | Callable c -> c.str
 
 let is_equal v1 v2 =
   match (v1, v2) with
@@ -73,6 +83,22 @@ let rec eval_expr env expr =
       let value = eval_expr env expr in
       env_assign env name value;
       value
+  | EXPR_Call (callee_expr, arg_exprs) ->
+      let callee = eval_expr env callee_expr in
+      let callable =
+        match callee with
+        | Callable c -> c
+        | _ -> failwith "Can only call functions and classes."
+      in
+      let n_args = List.length arg_exprs in
+      let args =
+        match n_args = callable.arity with
+        | true -> List.map (eval_expr env) arg_exprs
+        | false ->
+            failwith
+              (sprintf "Expected %d arguments but got %d" callable.arity n_args)
+      in
+      callable.call args
 
 and eval_unary env op expr =
   let v = eval_expr env expr in
@@ -120,9 +146,10 @@ let eval_var_stmt env name init_expr =
     | Some expr -> eval_expr env expr
     | None -> Nil
   in
-  env_define env name init_value |> ignore
+  env_define env name init_value
 
 exception BreakException
+exception ReturnException of value
 
 let rec eval_stmt env stmt =
   match stmt with
@@ -130,6 +157,7 @@ let rec eval_stmt env stmt =
       let new_env = env_create (Some env) in
       List.iter (eval_stmt new_env) stmts
   | STMT_Expression expr -> eval_expr env expr |> ignore
+  | STMT_Fun (name, params, body) -> eval_fun_stmt env name params body
   | STMT_If (condition, then_branch, else_branch) -> (
       let c = eval_expr env condition in
       if is_truthy c then eval_stmt env then_branch
@@ -150,9 +178,37 @@ let rec eval_stmt env stmt =
   | STMT_Print expr -> expr |> eval_expr env |> string_of_value |> print_endline
   | STMT_Var (name, init_expr) -> eval_var_stmt env name init_expr
   | STMT_Break -> raise BreakException
+  | STMT_Return expr ->
+      let return_val =
+        match expr with
+        | Some e -> eval_expr env e
+        | None -> Nil
+      in
+      raise (ReturnException return_val)
+
+and eval_fun_stmt env name params body =
+  let call args =
+    let fun_env = env_create (Some env) in
+    let bound_params = List.combine params args in
+    List.iter (fun (param, arg) -> env_define fun_env param arg) bound_params;
+    try
+      List.iter (eval_stmt fun_env) body;
+      Nil
+    with ReturnException v -> v
+  in
+  let callable =
+    Callable { arity = List.length params; str = sprintf "<fn %s>" name; call }
+  in
+  env_define env name callable
 
 let interpret stmts =
-  let global_env = env_create None in
+  env_define global_env "clock"
+    (Callable
+       {
+         arity = 0;
+         str = "<native fn>";
+         call = (fun _ -> Number (Sys.time ()));
+       });
   let rec step env stmts =
     match stmts with
     | stmt :: rest ->

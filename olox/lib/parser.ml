@@ -41,21 +41,31 @@ let match_tokens parser toks =
 
 Grammar
 -------
+
 program     → declaration* EOF ;
 
-declaration → varDecl | statement ;
+declaration → funDecl | varDecl | statement ;
+funDecl     → "fun" function ;
+function    → IDENTIFIER "(" parameters? ")" block ;
+parameters  → IDENTIFIER ( "," IDENTIFIER )* ;
 varDecl     → "var" IDENTIFIER ( "=" expression )? ";" ;
-statement   → exprStmt | forStmt | ifStmt | whileStmt | printStmt | block ;
+statement   → exprStmt
+            | forStmt
+            | ifStmt
+            | printStmt
+            | returnStmt
+            | whileStmt
+            | block ;
 exprStmt    → expression ";" ;
 forStmt     → "for" "(" ( varDecl | exprStmt | ";" )
             expression? ";"
             expression? ")" statement ;
 ifStmt      → "if" "(" expression ")" statement
             ( "else" statement )? ;
-whileStmt   → "while" "(" expression ")" statement ;
 printStmt   → "print" expression ";" ;
+returnStmt  → "return" expression? ";" ;
+whileStmt   → "while" "(" expression ")" statement ;
 block       → "{" declaration* "}" ;
-
 
 expression  → assignment ;
 assignment  → IDENTIFIER "=" assignment | logic_or ;
@@ -65,7 +75,9 @@ equality    → comparison ( ( "!=" | "==" ) comparison )* ;
 comparison  → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 term        → factor ( ( "-" | "+" ) factor )* ;
 factor      → unary ( ( "/" | "*" ) unary )* ;
-unary       → ( "!" | "-" ) unary | primary ;
+unary       → ( "!" | "-" ) unary | call ;
+call        → primary ( "(" arguments? ")" )* ;
+arguments   → expression ( "," expression )* ;
 primary     → "true" | "false" | "nil"
             | NUMBER | STRING
             | "(" expression ")"
@@ -163,13 +175,36 @@ and parse_factor parser =
   in
   step parser lhs
 
-(* unary → ( "!" | "-" ) unary | primary ; *)
+(* unary → ( "!" | "-" ) unary | call ; *)
 and parse_unary parser =
   if match_tokens parser [ Token.Bang; Token.Minus ] then
     let op = unop_of_tok parser.prev.token in
     let inner_expr = parse_unary parser in
     EXPR_Unary (op, inner_expr)
-  else parse_primary parser
+  else parse_call parser
+
+(* arguments → expression ( "," expression )* ; *)
+and finish_call parser callee =
+  let rec step args =
+    let arg = parse_expr parser in
+    if match_tokens parser [ Token.Comma ] then step (arg :: args)
+    else arg :: args
+  in
+  let args = if check parser Token.RightParen then [] else List.rev (step []) in
+  consume parser Token.RightParen "Expect ')' after arguments.";
+  if List.length args > 255 then
+    parser_error parser "Can't have more than 255 arguments.";
+  EXPR_Call (callee, args)
+
+(* call → primary ( "(" arguments? ")" )* ; *)
+and parse_call parser =
+  let expr = parse_primary parser in
+  let rec step parser callee =
+    if match_tokens parser [ Token.LeftParen ] then
+      step parser (finish_call parser callee)
+    else callee
+  in
+  step parser expr
 
 (* primary → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ; *)
 and parse_primary parser =
@@ -199,9 +234,20 @@ let rec parse_stmt parser =
   else if match_tokens parser [ Token.KWFor ] then parse_for_stmt parser
   else if match_tokens parser [ Token.KWIf ] then parse_if_stmt parser
   else if match_tokens parser [ Token.KWWhile ] then parse_while_stmt parser
+  else if match_tokens parser [ Token.KWReturn ] then parse_return_stmt parser
   else if match_tokens parser [ Token.LeftBrace ] then
     STMT_Block (parse_block parser)
   else parse_expr_stmt parser
+
+(* returnStmt → "return" expression? ";" ; *)
+and parse_return_stmt parser =
+  let expr =
+    match parser.peek.token with
+    | Token.Semicolon -> None
+    | _ -> Some (parse_expr parser)
+  in
+  let _ = consume parser Token.Semicolon "Expect ';' after return value." in
+  STMT_Return expr
 
 (* exprStmt → expression ";" ; *)
 and parse_expr_stmt parser =
@@ -282,15 +328,39 @@ and parse_block parser =
   let _ = consume parser Token.RightBrace "Expect '}' after block." in
   List.rev stmts
 
+and parse_ident parser msg =
+  match parser.peek.token with
+  | Token.Identifier s ->
+      advance parser;
+      s
+  | _ -> failwith msg
+
+(* funDecl    → "fun" function ; *)
+(* function   → IDENTIFIER "(" parameters? ")" block ; *)
+(* parameters → IDENTIFIER ( "," IDENTIFIER )* ; *)
+and parse_fun_decl parser =
+  let ident = parse_ident parser "Expect function name." in
+  consume parser Token.LeftParen "Expect '(' after function name.";
+  let rec parse_params parser params =
+    let param = parse_ident parser "Expect parameter name." in
+    if match_tokens parser [ Token.Comma ] then
+      parse_params parser (param :: params)
+    else param :: params
+  in
+  let params =
+    if check parser Token.RightParen then []
+    else List.rev (parse_params parser [])
+  in
+  consume parser Token.RightParen "Expect ')' after parameters.";
+  consume parser Token.LeftBrace "Expect '{' before function body.";
+  let body = parse_block parser in
+  if List.length params > 255 then
+    parser_error parser "Can't have more than 255 parameters.";
+  STMT_Fun (ident, params, body)
+
 (* varDecl → "var" IDENTIFIER ( "=" expression )? ";" ; *)
 and parse_var_decl parser =
-  let ident =
-    match parser.peek.token with
-    | Token.Identifier s ->
-        advance parser;
-        s
-    | _ -> failwith "Expect variable name."
-  in
+  let ident = parse_ident parser "Expect variable name." in
   let init_expr =
     if match_tokens parser [ Token.Equal ] then Some (parse_expr parser)
     else None
@@ -298,9 +368,10 @@ and parse_var_decl parser =
   consume parser Token.Semicolon "Expect ';' after variable declaration.";
   STMT_Var (ident, init_expr)
 
-(* declaration → varDecl | statement ; *)
+(* declaration → funDecl | varDecl | statement ; *)
 and parse_declaration parser =
-  if match_tokens parser [ Token.KWVar ] then parse_var_decl parser
+  if match_tokens parser [ Token.KWFun ] then parse_fun_decl parser
+  else if match_tokens parser [ Token.KWVar ] then parse_var_decl parser
   else parse_stmt parser
 
 (* program → declaration* EOF ; *)

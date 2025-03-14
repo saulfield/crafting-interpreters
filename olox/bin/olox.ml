@@ -7,6 +7,9 @@ open Interpreter
 let run src =
   let scanner = make_scanner src in
   let tokens = scan_tokens scanner in
+  (* let _ =
+    Queue.iter (fun tok -> print_endline (Scanner.show_token_info tok)) tokens
+  in *)
   let parser = make_parser tokens in
   let stmts = parse parser in
   (* let _ = List.iter (fun stmt -> print_endline (Ast.show_stmt stmt)) stmts in *)
