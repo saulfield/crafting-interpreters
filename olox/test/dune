@@ -1,7 +1,7 @@
 (test
- (name scanner_tests)
+ (name lex_tests)
  (libraries ounit2 olox))
 
 (test
- (name parser_tests)
+ (name parse_tests)
  (libraries ounit2 olox))

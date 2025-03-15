@@ -26,6 +26,7 @@ type t =
   | Number of float
   (* Keywords *)
   | KWAnd
+  | KWBreak
   | KWClass
   | KWElse
   | KWFalse
@@ -41,7 +42,27 @@ type t =
   | KWTrue
   | KWVar
   | KWWhile
-  | KWBreak
   (* Special *)
   | EOF
 [@@deriving show]
+
+let from_identifier s =
+  match s with
+  | "and" -> KWAnd
+  | "class" -> KWClass
+  | "else" -> KWElse
+  | "false" -> KWFalse
+  | "for" -> KWFor
+  | "fun" -> KWFun
+  | "if" -> KWIf
+  | "nil" -> KWNil
+  | "or" -> KWOr
+  | "print" -> KWPrint
+  | "return" -> KWReturn
+  | "super" -> KWSuper
+  | "this" -> KWThis
+  | "true" -> KWTrue
+  | "var" -> KWVar
+  | "while" -> KWWhile
+  | "break" -> KWBreak
+  | s -> Identifier s

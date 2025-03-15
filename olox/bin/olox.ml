@@ -1,19 +1,22 @@
 open Printf
 open Olox
-open Scanner
-open Parser
-open Interpreter
+
+(* open Lex *)
+(* open Parse *)
+(* open Interpret *)
+
+(* let rec print_tokens ls =
+  let token = Lex.next_token ls in
+  printf "%d %s\n" ls.line (Token.show token);
+  if token == Token.EOF then () else print_tokens ls *)
 
 let run src =
-  let scanner = make_scanner src in
-  let tokens = scan_tokens scanner in
-  (* let _ =
-    Queue.iter (fun tok -> print_endline (Scanner.show_token_info tok)) tokens
-  in *)
-  let parser = make_parser tokens in
-  let stmts = parse parser in
+  let lex_state = Lex.init src in
+  (* let _ = print_tokens lex_state in *)
+  let parse_state = Parse.init lex_state in
+  let stmts = Parse.parse parse_state in
   (* let _ = List.iter (fun stmt -> print_endline (Ast.show_stmt stmt)) stmts in *)
-  interpret stmts |> ignore
+  Interpret.interpret stmts |> ignore
 
 let run_file filename =
   let ch = open_in_bin filename in
