@@ -1,10 +1,11 @@
 open Printf
 
+let silence = ref false
 let had_error = ref false
 let had_runtime_error = ref false
 
 let report line where message =
-  printf "[line %d] Error%s: %s\n" line where message;
+  if !silence = false then printf "[line %d] Error%s: %s\n" line where message;
   had_error := true
 
 let error line message = report line "" message

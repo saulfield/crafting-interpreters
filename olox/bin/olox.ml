@@ -18,6 +18,14 @@ let run src =
   (* let _ = List.iter (fun stmt -> print_endline (Ast.show_stmt stmt)) stmts in *)
   Interpret.interpret stmts |> ignore
 
+(* Try to parse as an expression, eval and print the resulting value *)
+let run_expr src =
+  let lex_state = Lex.init src in
+  let parse_state = Parse.init lex_state in
+  let expr = Parse.parse_expr parse_state in
+  let env = Interpret.global_env in
+  expr |> Interpret.eval_expr env |> Interpret.string_of_value |> print_endline
+
 let run_file filename =
   let ch = open_in_bin filename in
   let src = really_input_string ch (in_channel_length ch) in
@@ -25,13 +33,21 @@ let run_file filename =
   run src;
   if !Common.had_error then exit 65
 
+let run_repl src =
+  try
+    Common.silence := true;
+    run_expr src
+  with Failure _ ->
+    Common.silence := false;
+    run src
+
 let run_prompt () =
   let continue = ref true in
   while !continue do
     try
       print_string "> ";
       let line = read_line () in
-      run line;
+      run_repl line;
       Common.had_error := false
     with End_of_file ->
       continue := false;
