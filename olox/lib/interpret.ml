@@ -60,9 +60,9 @@ let string_of_value v =
 let is_equal v1 v2 =
   match (v1, v2) with
   | Nil, Nil -> true
-  | Bool b1, Bool b2 -> b1 == b2
-  | Number n1, Number n2 -> n1 == n2
-  | String s1, String s2 -> s1 == s2
+  | Bool b1, Bool b2 -> b1 = b2
+  | Number n1, Number n2 -> n1 = n2
+  | String s1, String s2 -> s1 = s2
   | _ -> false
 
 let is_truthy v =

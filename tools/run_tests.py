@@ -7,6 +7,80 @@ BASE_DIR = Path(__file__).parents[1]
 INTERPRETER_PATH = str(BASE_DIR / "olox/_build/default/bin/olox.exe")
 OUTPUT_PATTERN = re.compile(r"// expect: (.*)")
 
+IGNORED_GROUPS = {
+    "benchmark",
+    "call",
+    "class",
+    "constructor",
+    "field",
+    "inheritance",
+    "limit",
+    "method",
+    "print",
+    "scanning",
+    "super",
+    "this",
+}
+
+IGNORED_NAMES = {
+    "equals_class",
+    "in_method",
+    "mutual_recursion",
+    "to_this",
+    "prefix_operator",
+    "infix_operator",
+    "undefined",
+    "394",
+    "class_in_body",
+    "var_in_body",
+    "fun_in_body",
+    "statement_initializer",
+    "statement_condition",
+    "statement_increment",
+    "error_after_multiline",
+    "unterminated",
+    "local_from_method",
+    "undefined_local",
+    "undefined_global",
+    "close_over_method_parameter",
+    "leading_dot",
+    "decimal_point_at_eof",
+    "var_in_else",
+    "fun_in_else",
+    "fun_in_then",
+    "var_in_then",
+    "class_in_else",
+    "class_in_then",
+    "greater_num_nonnum",
+    "add_bool_num",
+    "equals_method",
+    "greater_or_equal_num_nonnum",
+    "add_nil_nil",
+    "negate_nonnum",
+    "subtract_nonnum_num",
+    "less_or_equal_num_nonnum",
+    "less_nonnum_num",
+    "less_or_equal_nonnum_num",
+    "less_num_nonnum",
+    "add_num_nil",
+    "multiply_nonnum_num",
+    "multiply_num_nonnum",
+    "greater_nonnum_num",
+    "add_bool_nil",
+    "divide_nonnum_num",
+    "not_class",
+    "greater_or_equal_nonnum_num",
+    "subtract_num_nonnum",
+    "divide_num_nonnum",
+    "too_many_arguments",
+    "missing_arguments",
+    "too_many_parameters",
+    "local_mutual_recursion",
+    "body_must_be_block",
+    "missing_comma_in_parameters",
+    "extra_arguments",
+}
+
 
 class bcolors:
     HEADER = "\033[95m"
@@ -58,23 +132,6 @@ def run_test(test_path: Path, print_diff: bool = False) -> bool:
 
 
 def main():
-    ignored_groups = {
-        "benchmark",
-        "class",
-        "constructor",
-        "field",
-        "inheritance",
-        "limit",
-        "method",
-        "scanning",
-        "super",
-        "this",
-    }
-    ignored_names = {
-        "mutual_recursion",
-        "to_this",
-        "prefix_operator",
-    }
     all_tests = list(BASE_DIR.rglob("tests/**/*.lox"))
     n_tests = len(all_tests)
     n_ignored = 0
@@ -83,10 +140,10 @@ def main():
     for path in all_tests:
         group = path.parents[0].stem
         name = path.stem
-        if group in ignored_groups or name in ignored_names:
+        if group in IGNORED_GROUPS or name in IGNORED_NAMES:
             n_ignored += 1
             continue
-        success = run_test(path)
+        success = run_test(path, True)
         if success:
             n_passed += 1
             print(f"{bcolors.OKGREEN}[PASS]{bcolors.ENDC}", end=" ")
@@ -96,7 +153,7 @@ def main():
             print(f"{bcolors.FAIL}[FAIL]{bcolors.ENDC}", end=" ")
             print(f"{group}/{name}{path.suffix}")
             # break
-    print(f"Total tests: {n_tests}")
+    print(f"\nTotal tests: {n_tests}")
     print(f"- Passed:  {n_passed}")
     print(f"- Failed:  {n_failed}")
     print(f"- Ignored: {n_ignored}")

@@ -34,7 +34,10 @@ let lex_string ls =
   let rec aux () =
     match peek ls with
     | '"' -> advance ls
-    | '\n' -> ls.line <- ls.line + 1
+    | '\n' ->
+        ls.line <- ls.line + 1;
+        advance ls;
+        aux ()
     | '\000' -> Common.error ls.line "Unterminated string"
     | _ ->
         advance ls;
