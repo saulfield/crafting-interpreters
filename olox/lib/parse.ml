@@ -4,13 +4,19 @@ type parse_state = {
   lex_state : Lex.lex_state;
   mutable peek : Token.t;
   mutable prev : Token.t;
+  mutable node_id_counter : int;
 }
 
 (* Utility functions *)
 
 let init lex_state =
   let token = Lex.next_token lex_state in
-  { lex_state; peek = token; prev = token }
+  { lex_state; peek = token; prev = token; node_id_counter = 1 }
+
+let next_id ps =
+  let id = ps.node_id_counter in
+  ps.node_id_counter <- id + 1;
+  id
 
 let advance ps =
   let token = ps.peek in
@@ -160,7 +166,7 @@ and parse_primary ps =
       let expr = parse_expr ps in
       consume ps Token.RightParen "Expect ')' after expression.";
       expr
-  | Token.Identifier s -> EXPR_Variable s
+  | Token.Identifier s -> EXPR_Variable { name = s; id = next_id ps }
   | _ ->
       parser_error ps "Expect expression.";
       failwith "Parse error"

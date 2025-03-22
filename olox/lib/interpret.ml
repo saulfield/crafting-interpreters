@@ -16,8 +16,13 @@ and callable = { arity : int; str : string; call : value list -> value }
 (* Environments *)
 type env = { parent : env option; values : (string, value) Hashtbl.t }
 
+type interpret_state = {
+  global_env : env;
+  env : env;
+  locals : (var, int) Hashtbl.t;
+}
+
 let env_create parent = { parent; values = Hashtbl.create 16 }
-let global_env = env_create None
 let env_define env name value = Hashtbl.add env.values name value
 
 let rec env_get env name =
@@ -35,6 +40,13 @@ let rec env_assign env name value =
       match env.parent with
       | Some parent_env -> env_assign parent_env name value
       | None -> failwith (sprintf "Undefined variable '%s'." name))
+
+let rec env_at_depth env depth =
+  if depth = 0 then env
+  else
+    match env.parent with
+    | Some parent_env -> env_at_depth parent_env (depth - 1)
+    | None -> failwith "Expected parent env."
 
 (* Evaluation *)
 let string_of_value v =
@@ -71,20 +83,12 @@ let eval_literal lit =
   | LIT_number n -> Number n
   | LIT_string s -> String s
 
-let rec eval_expr env expr =
+let rec eval_expr state expr =
   match expr with
-  | EXPR_Literal lit -> eval_literal lit
-  | EXPR_Grouping inner -> eval_expr env inner
-  | EXPR_Binary (lhs, op, rhs) -> eval_binary env lhs op rhs
-  | EXPR_Logical (lhs, op, rhs) -> eval_logical env lhs op rhs
-  | EXPR_Unary (op, inner) -> eval_unary env op inner
-  | EXPR_Variable name -> env_get env name
-  | EXPR_Assign (name, expr) ->
-      let value = eval_expr env expr in
-      env_assign env name value;
-      value
+  | EXPR_Assign (var, expr) -> assign_var state var expr
+  | EXPR_Binary (lhs, op, rhs) -> eval_binary state lhs op rhs
   | EXPR_Call (callee_expr, arg_exprs) ->
-      let callee = eval_expr env callee_expr in
+      let callee = eval_expr state callee_expr in
       let callable =
         match callee with
         | Callable c -> c
@@ -93,12 +97,35 @@ let rec eval_expr env expr =
       let n_args = List.length arg_exprs in
       let args =
         match n_args = callable.arity with
-        | true -> List.map (eval_expr env) arg_exprs
+        | true -> List.map (eval_expr state) arg_exprs
         | false ->
             failwith
               (sprintf "Expected %d arguments but got %d" callable.arity n_args)
       in
       callable.call args
+  | EXPR_Grouping inner -> eval_expr state inner
+  | EXPR_Logical (lhs, op, rhs) -> eval_logical state lhs op rhs
+  | EXPR_Literal lit -> eval_literal lit
+  | EXPR_Unary (op, inner) -> eval_unary state op inner
+  | EXPR_Variable var -> lookup_var state var
+
+and lookup_var state var =
+  let env =
+    match Hashtbl.find_opt state.locals var with
+    | Some depth -> env_at_depth state.env depth
+    | None -> state.global_env
+  in
+  env_get env var.name
+
+and assign_var state var expr =
+  let value = eval_expr state expr in
+  let env =
+    match Hashtbl.find_opt state.locals var with
+    | Some depth -> env_at_depth state.env depth
+    | None -> state.global_env
+  in
+  env_assign env var.name value;
+  value
 
 and eval_unary env op expr =
   let v = eval_expr env expr in
@@ -140,68 +167,70 @@ and eval_logical env lhs op rhs =
   | LOGOP_or -> if is_truthy lval then lval else eval_expr env rhs
   | LOGOP_and -> if not (is_truthy lval) then lval else eval_expr env rhs
 
-let eval_var_stmt env name init_expr =
+let eval_var_stmt state name init_expr =
   let init_value =
     match init_expr with
-    | Some expr -> eval_expr env expr
+    | Some expr -> eval_expr state expr
     | None -> Nil
   in
-  env_define env name init_value
+  env_define state.env name init_value
 
 exception BreakException
 exception ReturnException of value
 
-let rec eval_stmt env stmt =
+let rec eval_stmt state stmt =
   match stmt with
   | STMT_Block stmts ->
-      let new_env = env_create (Some env) in
-      List.iter (eval_stmt new_env) stmts
-  | STMT_Expression expr -> eval_expr env expr |> ignore
-  | STMT_Fun (name, params, body) -> eval_fun_stmt env name params body
+      let new_env = env_create (Some state.env) in
+      List.iter (eval_stmt { state with env = new_env }) stmts
+  | STMT_Expression expr -> eval_expr state expr |> ignore
+  | STMT_Fun (name, params, body) -> eval_fun_stmt state name params body
   | STMT_If (condition, then_branch, else_branch) -> (
-      let c = eval_expr env condition in
-      if is_truthy c then eval_stmt env then_branch
+      let c = eval_expr state condition in
+      if is_truthy c then eval_stmt state then_branch
       else
         match else_branch with
-        | Some stmt -> eval_stmt env stmt
+        | Some stmt -> eval_stmt state stmt
         | None -> ())
   | STMT_While (condition, body) ->
       let rec step () =
-        if is_truthy (eval_expr env condition) then
+        if is_truthy (eval_expr state condition) then
           try
-            eval_stmt env body;
+            eval_stmt state body;
             step ()
           with BreakException -> ()
         else ()
       in
       step ()
-  | STMT_Print expr -> expr |> eval_expr env |> string_of_value |> print_endline
-  | STMT_Var (name, init_expr) -> eval_var_stmt env name init_expr
+  | STMT_Print expr ->
+      expr |> eval_expr state |> string_of_value |> print_endline
+  | STMT_Var (name, init_expr) -> eval_var_stmt state name init_expr
   | STMT_Break -> raise BreakException
   | STMT_Return expr ->
       let return_val =
         match expr with
-        | Some e -> eval_expr env e
+        | Some e -> eval_expr state e
         | None -> Nil
       in
       raise (ReturnException return_val)
 
-and eval_fun_stmt env name params body =
+and eval_fun_stmt state name params body =
   let call args =
-    let fun_env = env_create (Some env) in
+    let fun_env = env_create (Some state.env) in
     let bound_params = List.combine params args in
     List.iter (fun (param, arg) -> env_define fun_env param arg) bound_params;
     try
-      List.iter (eval_stmt fun_env) body;
+      List.iter (eval_stmt { state with env = fun_env }) body;
       Nil
     with ReturnException v -> v
   in
   let callable =
     Callable { arity = List.length params; str = sprintf "<fn %s>" name; call }
   in
-  env_define env name callable
+  env_define state.env name callable
 
-let interpret stmts =
+let create_global_env () =
+  let global_env = env_create None in
   env_define global_env "clock"
     (Callable
        {
@@ -209,11 +238,16 @@ let interpret stmts =
          str = "<native fn>";
          call = (fun _ -> Number (Sys.time ()));
        });
-  let rec step env stmts =
+  global_env
+
+let interpret locals stmts =
+  let rec step state stmts =
     match stmts with
     | stmt :: rest ->
-        (try eval_stmt env stmt with Failure e -> Common.runtime_error e 1);
-        step env rest
+        (try eval_stmt state stmt with Failure e -> Common.runtime_error e 1);
+        step state rest
     | [] -> ()
   in
-  step global_env stmts
+  let global_env = create_global_env () in
+  let state = { global_env; env = global_env; locals } in
+  step state stmts

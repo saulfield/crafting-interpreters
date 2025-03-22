@@ -21,24 +21,29 @@ type binop =
   | BINOP_div
 [@@deriving show]
 
+(* Guarantee unique var IDs for each location *)
+(* type node_id = Node of int [@@deriving show] *)
+type var = { name : string; id : int } [@@deriving show]
+(* type var = Var of string * int  *)
+
 type expr =
-  | EXPR_Assign of string * expr
+  | EXPR_Assign of var * expr
   | EXPR_Binary of expr * binop * expr
   | EXPR_Call of expr * expr list
   | EXPR_Grouping of expr
   | EXPR_Logical of expr * logop * expr
   | EXPR_Literal of literal
   | EXPR_Unary of unop * expr
-  | EXPR_Variable of string
+  | EXPR_Variable of var
 [@@deriving show]
 
 type stmt =
   | STMT_Block of stmt list
+  | STMT_Break
   | STMT_Expression of expr
   | STMT_Fun of string * string list * stmt list
   | STMT_If of expr * stmt * stmt option
   | STMT_While of expr * stmt
-  | STMT_Break
   | STMT_Return of expr option
   | STMT_Print of expr
   | STMT_Var of string * expr option
