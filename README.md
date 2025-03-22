@@ -1,8 +1,24 @@
 # Crafting Interpreters
 
-# Benchmarking
+## Run
 
-## Scanner (100MB file of random characters)
+1. Install `just` from https://just.systems/man/en/
+2. Invoke a command with `just <command>`
+
+```sh
+# Run the OCaml interpreter, optionally with a source file as input
+just run [FILE]
+
+# Build the OCaml interpreter
+just build
+
+# Build the OCaml interpreter in watch mode, for development
+just dev
+```
+
+## Benchmarking
+
+### Scanner (100MB file of random characters)
 
 ```sh
 hyperfine \ 
