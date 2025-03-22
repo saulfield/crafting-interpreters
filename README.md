@@ -1,5 +1,10 @@
 # Crafting Interpreters
 
+## Dependencies
+
+- OCaml (for the tree-walk interpreter)
+- [Optional] Python and [uv](https://docs.astral.sh/uv) for the test suite runner
+
 ## Run
 
 1. Install `just` from https://just.systems/man/en/
@@ -14,6 +19,9 @@ just build
 
 # Build the OCaml interpreter in watch mode, for development
 just dev
+
+# Run the test suites (requires Python and uv)
+just test
 ```
 
 ## Benchmarking

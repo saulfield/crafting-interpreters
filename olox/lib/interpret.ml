@@ -53,8 +53,8 @@ let string_of_value v =
   match v with
   | Nil -> "nil"
   | Bool b -> string_of_bool b
-  | Number n -> string_of_float n
-  | String s -> "\"" ^ s ^ "\""
+  | Number n -> sprintf "%g" n
+  | String s -> s
   | Callable c -> c.str
 
 let is_equal v1 v2 =

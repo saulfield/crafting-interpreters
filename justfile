@@ -9,3 +9,6 @@ default:
 
 @dev:
     ( cd olox ; dune build --watch )
+
+@test:
+    uv run tools/run_tests.py
