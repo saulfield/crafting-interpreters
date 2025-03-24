@@ -17,7 +17,6 @@ IGNORED_GROUPS = {
     "inheritance",
     "limit",
     "method",
-    "print",
     "super",
     "this",
 }
@@ -27,8 +26,6 @@ IGNORED_NAMES = {
     "in_method",
     "to_this",
     "394",
-    "statement_initializer",
-    "statement_condition",
     "local_from_method",
     "close_over_method_parameter",
     "decimal_point_at_eof",

@@ -144,10 +144,9 @@ and finish_call ps callee =
   in
   let args = if check ps Token.RightParen then [] else List.rev (step []) in
   consume ps Token.RightParen "Expect ')' after arguments.";
-  if List.length args > 255 then (
+  if List.length args > 255 then
     parser_error ps "Can't have more than 255 arguments.";
-    failwith "Parse error")
-  else EXPR_Call (callee, args)
+  EXPR_Call (callee, args)
 
 and parse_call ps =
   let expr = parse_primary ps in
@@ -305,13 +304,7 @@ and parse_declaration ps =
   else if match_tokens ps [ Token.KWVar ] then parse_var_decl ps
   else parse_stmt ps
 
-let parse ps =
-  let rec step stmts =
-    if ps.peek = Token.EOF then stmts else step (parse_declaration ps :: stmts)
-  in
-  try List.rev (step []) with Failure _e -> []
-
-let _synchronize ps =
+let synchronize ps =
   advance ps;
   let rec step ps =
     if ps.prev = Token.Semicolon then ()
@@ -325,3 +318,14 @@ let _synchronize ps =
           step ps
   in
   step ps
+
+let parse ps =
+  let rec step stmts =
+    if ps.peek = Token.EOF then stmts
+    else
+      try step (parse_declaration ps :: stmts)
+      with Failure _ ->
+        synchronize ps;
+        step stmts
+  in
+  List.rev (step [])

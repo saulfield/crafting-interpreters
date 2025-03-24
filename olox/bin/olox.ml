@@ -13,11 +13,12 @@ let run src =
   let parse_state = Parse.init lex_state in
   let stmts = Parse.parse parse_state in
   (* let _ = List.iter (fun stmt -> print_endline (Ast.show_stmt stmt)) stmts in *)
-  let locals = Resolve.run stmts in
-  (* Hashtbl.iter
+  if !Common.had_error = false then
+    let locals = Resolve.run stmts in
+    (* Hashtbl.iter
     (fun var depth -> printf "%s -> %d\n" (Ast.show_var var) depth)
     locals *)
-  Interpret.interpret locals stmts |> ignore
+    if !Common.had_error = false then Interpret.interpret locals stmts |> ignore
 
 (* Try to parse as an expression, eval and print the resulting value *)
 let run_expr src =
