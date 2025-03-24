@@ -6,6 +6,7 @@ import subprocess
 BASE_DIR = Path(__file__).parents[1]
 INTERPRETER_PATH = str(BASE_DIR / "olox/_build/default/bin/olox.exe")
 OUTPUT_PATTERN = re.compile(r"// expect: (.*)")
+ERROR_PATTERN = re.compile(r"rror.*: (.*)")
 
 IGNORED_GROUPS = {
     "benchmark",
@@ -17,7 +18,6 @@ IGNORED_GROUPS = {
     "limit",
     "method",
     "print",
-    "scanning",
     "super",
     "this",
 }
@@ -25,60 +25,16 @@ IGNORED_GROUPS = {
 IGNORED_NAMES = {
     "equals_class",
     "in_method",
-    "mutual_recursion",
     "to_this",
-    "prefix_operator",
-    "infix_operator",
-    "undefined",
     "394",
-    "class_in_body",
-    "var_in_body",
-    "fun_in_body",
     "statement_initializer",
     "statement_condition",
-    "statement_increment",
-    "error_after_multiline",
-    "unterminated",
     "local_from_method",
-    "undefined_local",
-    "undefined_global",
     "close_over_method_parameter",
-    "leading_dot",
     "decimal_point_at_eof",
-    "var_in_else",
-    "fun_in_else",
-    "fun_in_then",
-    "var_in_then",
-    "class_in_else",
-    "class_in_then",
-    "greater_num_nonnum",
-    "add_bool_num",
     "equals_method",
-    "greater_or_equal_num_nonnum",
-    "add_nil_nil",
-    "negate_nonnum",
-    "subtract_nonnum_num",
-    "less_or_equal_num_nonnum",
-    "less_nonnum_num",
-    "less_or_equal_nonnum_num",
-    "less_num_nonnum",
-    "add_num_nil",
-    "multiply_nonnum_num",
-    "multiply_num_nonnum",
-    "greater_nonnum_num",
-    "add_bool_nil",
-    "divide_nonnum_num",
     "not_class",
-    "greater_or_equal_nonnum_num",
-    "subtract_num_nonnum",
-    "divide_num_nonnum",
-    "too_many_arguments",
-    "missing_arguments",
-    "too_many_parameters",
-    "local_mutual_recursion",
-    "body_must_be_block",
-    "missing_comma_in_parameters",
-    "extra_arguments",
+    "trailing_dot",
 }
 
 
@@ -107,10 +63,17 @@ def run_test(test_path: Path, print_diff: bool = False) -> bool:
             match = OUTPUT_PATTERN.search(text.strip("\n"))
             if match:
                 expected_outputs.append(Output(match.group(1), line))
+                continue
+            match = ERROR_PATTERN.search(text.strip("\n"))
+            if match:
+                expected_outputs.append(Output(match.group(1), line))
 
     result = subprocess.run([INTERPRETER_PATH, str(test_path)], capture_output=True, text=True)
     actual_outputs = []
     for line, text in enumerate(result.stdout.splitlines(), start=1):
+        match = ERROR_PATTERN.search(text.strip("\n"))
+        if match:
+            text = match.group(1)
         actual_outputs.append(Output(text, line))
 
     expected = [output.text for output in expected_outputs]
@@ -143,7 +106,7 @@ def main():
         if group in IGNORED_GROUPS or name in IGNORED_NAMES:
             n_ignored += 1
             continue
-        success = run_test(path, True)
+        success = run_test(path, False)
         if success:
             n_passed += 1
             print(f"{bcolors.OKGREEN}[PASS]{bcolors.ENDC}", end=" ")

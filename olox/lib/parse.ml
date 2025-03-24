@@ -31,7 +31,7 @@ let parser_error ps message =
   let token = ps.peek in
   let line = ps.lex_state.line in
   let lexeme = Lex.lexeme ps.lex_state in
-  Common.token_error token line lexeme message
+  Common.compile_error token line lexeme message
 
 let consume ps token message =
   if check ps token then advance ps
@@ -51,12 +51,15 @@ let rec parse_expr ps = parse_assign ps
 
 and parse_assign ps =
   let expr = parse_logic_or ps in
+  let token = ps.peek in
+  let line = ps.lex_state.line in
+  let lexeme = Lex.lexeme ps.lex_state in
   if match_tokens ps [ Token.Equal ] then (
     let rval = parse_assign ps in
     match expr with
     | EXPR_Variable name -> EXPR_Assign (name, rval)
     | _ ->
-        parser_error ps "Invalid assignment target.";
+        Common.compile_error token line lexeme "Invalid assignment target.";
         expr)
   else expr
 
@@ -141,9 +144,10 @@ and finish_call ps callee =
   in
   let args = if check ps Token.RightParen then [] else List.rev (step []) in
   consume ps Token.RightParen "Expect ')' after arguments.";
-  if List.length args > 255 then
+  if List.length args > 255 then (
     parser_error ps "Can't have more than 255 arguments.";
-  EXPR_Call (callee, args)
+    failwith "Parse error")
+  else EXPR_Call (callee, args)
 
 and parse_call ps =
   let expr = parse_primary ps in
@@ -165,7 +169,7 @@ and parse_primary ps =
   | Token.LeftParen ->
       let expr = parse_expr ps in
       consume ps Token.RightParen "Expect ')' after expression.";
-      expr
+      EXPR_Grouping expr
   | Token.Identifier s -> EXPR_Variable { name = s; id = next_id ps }
   | _ ->
       parser_error ps "Expect expression.";
@@ -266,7 +270,9 @@ and parse_ident ps msg =
   | Token.Identifier s ->
       advance ps;
       s
-  | _ -> failwith msg
+  | _ ->
+      parser_error ps msg;
+      failwith "Parser error."
 
 and parse_fun_decl ps =
   let ident = parse_ident ps "Expect function name." in

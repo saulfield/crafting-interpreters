@@ -74,7 +74,7 @@ let is_truthy v =
 let check_num v =
   match v with
   | Number n -> n
-  | _ -> failwith "Expected type 'Number'"
+  | _ -> failwith "Operand must be a number."
 
 let eval_literal lit =
   match lit with
@@ -100,7 +100,7 @@ let rec eval_expr state expr =
         | true -> List.map (eval_expr state) arg_exprs
         | false ->
             failwith
-              (sprintf "Expected %d arguments but got %d" callable.arity n_args)
+              (sprintf "Expected %d arguments but got %d." callable.arity n_args)
       in
       callable.call args
   | EXPR_Grouping inner -> eval_expr state inner
@@ -139,12 +139,9 @@ and eval_add lval rval =
   match (lval, rval) with
   | Number lnum, Number rnum -> Number (Float.add lnum rnum)
   | String lstr, String rstr -> String (lstr ^ rstr)
-  | String lstr, other -> String (lstr ^ string_of_value other)
-  | other, String rstr -> String (string_of_value other ^ rstr)
-  | left, right ->
-      failwith
-        (sprintf "Operands must be of same type (left=%s, right=%s)"
-           (string_of_value left) (string_of_value right))
+  (* | String lstr, other -> String (lstr ^ string_of_value other)
+  | other, String rstr -> String (string_of_value other ^ rstr) *)
+  | _ -> failwith "Operands must be two numbers or two strings."
 
 and eval_binary env lhs op rhs =
   let lval = eval_expr env lhs in
@@ -244,7 +241,7 @@ let interpret locals stmts =
   let rec step state stmts =
     match stmts with
     | stmt :: rest ->
-        (try eval_stmt state stmt with Failure e -> Common.runtime_error e 1);
+        (try eval_stmt state stmt with Failure e -> Common.runtime_error e);
         step state rest
     | [] -> ()
   in

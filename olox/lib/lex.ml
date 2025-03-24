@@ -38,16 +38,18 @@ let lex_string ls =
         ls.line <- ls.line + 1;
         advance ls;
         aux ()
-    | '\000' -> Common.error ls.line "Unterminated string"
+    | '\000' -> Common.error ls.line "Unterminated string."
     | _ ->
         advance ls;
         aux ()
   in
   let () = aux () in
-  let start_pos = ls.start + 1 in
-  let end_pos = ls.current - 1 in
-  let str_val = String.sub ls.src start_pos (end_pos - start_pos) in
-  String str_val
+  if peek ls = '\000' then EOF
+  else
+    let start_pos = ls.start + 1 in
+    let end_pos = ls.current - 1 in
+    let str_val = String.sub ls.src start_pos (end_pos - start_pos) in
+    String str_val
 
 let lex_digits ls =
   while is_digit (peek ls) do
@@ -105,4 +107,6 @@ let rec next_token ls =
     | '\n' ->
         ls.line <- ls.line + 1;
         next_token ls
-    | c -> failwith (sprintf "[Line %d] Unexpected character: '%c'" ls.line c)
+    | _ ->
+        Common.error ls.line "Unexpected character.";
+        next_token ls

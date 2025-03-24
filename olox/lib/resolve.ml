@@ -20,7 +20,9 @@ let declare rs name =
     let scope = Stack.top rs.scopes in
     match Hashtbl.find_opt scope name with
     | None -> Hashtbl.add scope name false
-    | Some _ -> failwith "Already a variable with this name in this scope."
+    | Some _ ->
+        Common.resolve_error name
+          "Already a variable with this name in this scope."
 
 let define rs name =
   if Stack.is_empty rs.scopes then ()
@@ -33,7 +35,9 @@ let check_initializer rs name =
   else
     let scope = Stack.top rs.scopes in
     match Hashtbl.find_opt scope name with
-    | Some false -> failwith "Can't read local variable in its own initializer."
+    | Some false ->
+        Common.resolve_error name
+          "Can't read local variable in its own initializer."
     | _ -> ()
 
 let resolve_local rs var =
@@ -97,7 +101,7 @@ let rec resolve_stmt rs stmt =
   | STMT_Print expr -> resolve_expr rs expr
   | STMT_Return expr -> (
       if rs.current_function == NoFunction then
-        failwith "Can't return from top-level code.";
+        Common.resolve_error "return" "Can't return from top-level code.";
       match expr with
       | Some expr -> resolve_expr rs expr
       | None -> ())
