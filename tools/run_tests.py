@@ -10,27 +10,11 @@ ERROR_PATTERN = re.compile(r"rror.*: (.*)")
 
 IGNORED_GROUPS = {
     "benchmark",
-    "call",
-    "class",
-    "constructor",
-    "field",
-    "inheritance",
     "limit",
-    "method",
-    "super",
-    "this",
 }
 
 IGNORED_NAMES = {
-    "equals_class",
-    "in_method",
-    "to_this",
-    "394",
-    "local_from_method",
-    "close_over_method_parameter",
     "decimal_point_at_eof",
-    "equals_method",
-    "not_class",
     "trailing_dot",
 }
 
