@@ -12,3 +12,6 @@ default:
 
 @test: build
     uv run tools/run_tests.py
+
+@vm:
+    ( cd c ; make clean all > /dev/null ; ./build/main )

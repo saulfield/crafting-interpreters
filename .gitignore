@@ -6,3 +6,4 @@
 fuzz.lox
 zlox/main
 olox/_build/
+c/build/
