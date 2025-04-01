@@ -1,6 +1,6 @@
 # Compiler and flags
 CC = clang
-CFLAGS = -std=c99 -Wall -Wextra -Werror -Wno-unused-parameter
+CFLAGS = -std=c99 -Wall -Wextra -Werror -Wno-unused-parameter -Wformat -Wformat=2 -Wstrict-prototypes
 
 # Directories
 SRC_DIR = src
