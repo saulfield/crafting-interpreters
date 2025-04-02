@@ -10,8 +10,7 @@ open Interpret
 let run src =
   let lex_state = Lex.init src in
   (* let _ = print_tokens lex_state in *)
-  let parse_state = Parse.init lex_state in
-  let stmts = Parse.parse parse_state in
+  let stmts = Parse.parse lex_state in
   (* let _ = List.iter (fun stmt -> print_endline (Ast.show_stmt stmt)) stmts in *)
   if !Common.had_error = false then
     let locals = Resolve.run stmts in
@@ -37,7 +36,7 @@ let run_file filename =
   run src;
   if !Common.had_error then exit 65
 
-let run_repl src =
+let _run_repl src =
   try
     Common.silence := true;
     run_expr src
@@ -51,7 +50,7 @@ let run_prompt () =
     try
       print_string "> ";
       let line = read_line () in
-      run_repl line;
+      run line;
       Common.had_error := false
     with End_of_file ->
       continue := false;

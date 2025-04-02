@@ -1,5 +1,5 @@
-(executable
- (name olox)
+(executables
+ (names main compiler)
  (libraries olox)
  (preprocess
   (pps ppx_deriving.show)))

@@ -2,7 +2,10 @@ default:
   @just --list
 
 @run *FILE:
-    ./olox/_build/default/bin/olox.exe {{FILE}}
+    ./olox/_build/default/bin/main.exe {{FILE}}
+
+@compile *FILE:
+    ./olox/_build/default/bin/compiler.exe {{FILE}}
 
 @build:
     ( cd olox ; dune build )
@@ -14,4 +17,4 @@ default:
     uv run tools/run_tests.py
 
 @vm:
-    ( cd c ; make clean all > /dev/null ; ./build/main )
+    ( cd runtime ; make clean all > /dev/null ; ./build/main )

@@ -319,7 +319,8 @@ let synchronize ps =
   in
   step ps
 
-let parse ps =
+let parse ls =
+  let ps = init ls in
   let rec step stmts =
     if ps.peek = Token.EOF then stmts
     else

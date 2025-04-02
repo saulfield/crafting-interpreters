@@ -6,4 +6,5 @@
 fuzz.lox
 zlox/main
 olox/_build/
-c/build/
+runtime/build/
+out.byte

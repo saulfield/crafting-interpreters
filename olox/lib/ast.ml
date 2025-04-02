@@ -90,3 +90,10 @@ let string_of_unop unop =
   match unop with
   | UNOP_neg -> "-"
   | UNOP_not -> "!"
+
+let string_of_literal lit =
+  match lit with
+  | LIT_string s -> Printf.sprintf "'%s'" s
+  | LIT_number n -> Printf.sprintf "%g" n
+  | LIT_bool b -> string_of_bool b
+  | LIT_nil -> "nil"
