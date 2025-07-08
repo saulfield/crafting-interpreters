@@ -5,12 +5,11 @@ const Lox = @import("lox.zig");
 const Chunk = @import("chunk.zig").Chunk;
 const Value = Lox.Value;
 const Opcode = Lox.Opcode;
-const printValue = Lox.printValue;
 
 pub const InterpretResult = enum {
-    interpret_ok,
-    interpret_compile_error,
-    interpret_runtime_error,
+    ok,
+    compile_error,
+    runtime_error,
 };
 
 const STACK_MAX = 256;
@@ -31,6 +30,10 @@ pub const VM = struct {
         };
     }
 
+    pub fn peek(self: *VM, dist: usize) Value {
+        return self.stack[self.sp - 1 - dist];
+    }
+
     pub fn push(self: *VM, value: Value) void {
         self.stack[self.sp] = value;
         self.sp += 1;
@@ -47,17 +50,40 @@ pub const VM = struct {
         return byte;
     }
 
-    fn binOp(self: *VM, opcode: Opcode) void {
-        const b = self.pop();
-        const a = self.pop();
-        const result = switch (opcode) {
-            .op_add => a.num + b.num,
-            .op_subtract => a.num - b.num,
-            .op_multiply => a.num * b.num,
-            .op_divide => a.num / b.num,
-            else => unreachable,
-        };
-        self.push(Value{ .num = result });
+    fn binOp(self: *VM, comptime T: type, opcode: Opcode) !void {
+        if (!self.peek(0).isNum() or !self.peek(1).isNum()) {
+            self.runtimeError("Operands must be numbers.");
+            return error.WrongOperandType;
+        }
+        const b = self.pop().num;
+        const a = self.pop().num;
+
+        switch (@typeInfo(T)) {
+            .float => {
+                const result = switch (opcode) {
+                    .op_add => a + b,
+                    .op_subtract => a - b,
+                    .op_multiply => a * b,
+                    .op_divide => a / b,
+                    else => unreachable,
+                };
+                self.push(Value.fromNum(result));
+            },
+            .bool => {
+                const result = switch (opcode) {
+                    .op_greater => a > b,
+                    .op_less => a < b,
+                    else => unreachable,
+                };
+                self.push(Value.fromBool(result));
+            },
+            else => @compileError("Unsupported type."),
+        }
+    }
+
+    fn runtimeError(self: *VM, message: []const u8) void {
+        std.debug.print("{s}\n", .{message});
+        self.sp = 0; // reset stack
     }
 
     pub fn interpret(self: *VM, chunk: *Chunk) InterpretResult {
@@ -71,18 +97,35 @@ pub const VM = struct {
                     const value = self.chunk.*.constants.items[index];
                     self.push(value);
                 },
-                .op_add, .op_subtract, .op_multiply, .op_divide => self.binOp(opcode),
-                .op_negate => {
+                .op_nil => self.push(Value.fromNil()),
+                .op_true => self.push(Value.fromBool(true)),
+                .op_false => self.push(Value.fromBool(false)),
+                .op_equal => {
+                    const b = self.pop();
+                    const a = self.pop();
+                    self.push(Value.fromBool(Value.equal(a, b)));
+                },
+                .op_greater, .op_less => self.binOp(bool, opcode) catch return .runtime_error,
+                .op_add, .op_subtract, .op_multiply, .op_divide => self.binOp(f64, opcode) catch return .runtime_error,
+                .op_not => {
                     const value = self.pop();
-                    self.push(Value{ .num = -value.num });
+                    self.push(Value.fromBool(value.isFalsey()));
+                },
+                .op_negate => {
+                    if (!self.peek(0).isNum()) {
+                        self.runtimeError("Operand must be a number.");
+                        return InterpretResult.runtime_error;
+                    }
+                    const value = self.pop();
+                    self.push(Value.fromNum(-value.num));
                 },
                 .op_return => {
-                    printValue(self.pop());
+                    self.pop().print();
                     std.debug.print("\n", .{});
-                    return InterpretResult.interpret_ok;
+                    return InterpretResult.ok;
                 },
             }
         }
-        return InterpretResult.interpret_ok;
+        unreachable;
     }
 };

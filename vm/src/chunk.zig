@@ -5,8 +5,6 @@ const ArrayList = std.ArrayList;
 const Lox = @import("lox.zig");
 const Value = Lox.Value;
 const Opcode = Lox.Opcode;
-const printOpcode = Lox.printOpcode;
-const printValue = Lox.printValue;
 
 pub const Chunk = struct {
     code: ArrayList(u8),
@@ -42,15 +40,15 @@ pub const Chunk = struct {
             switch (opcode) {
                 .op_constant => {
                     const constIndex = self.code.items[i + 1];
-                    const value = self.constants.items[constIndex];
-                    printOpcode(opcode);
+                    const value: Value = self.constants.items[constIndex];
+                    opcode.print();
                     std.debug.print(" ", .{});
-                    printValue(value);
+                    value.print();
                     std.debug.print("\n", .{});
                     i += 2;
                 },
                 else => {
-                    printOpcode(opcode);
+                    opcode.print();
                     std.debug.print("\n", .{});
                     i += 1;
                 },
