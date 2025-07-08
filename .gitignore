@@ -7,4 +7,6 @@ fuzz.lox
 zlox/main
 olox/_build/
 runtime/build/
+vm/zig-out
+vm/.zig-cache
 out.byte
