@@ -16,5 +16,8 @@ default:
 @test: build
     uv run tools/run_tests.py
 
-@vm:
+@vm *FILE:
+    ( cd vm ; zig build ) ; ./vm/zig-out/bin/vm {{FILE}}
+
+@old-vm:
     ( cd runtime ; make clean all > /dev/null ; ./build/main )

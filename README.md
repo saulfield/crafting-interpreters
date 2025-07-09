@@ -22,6 +22,12 @@ just dev
 
 # Run the test suites (requires Python and uv)
 just test
+
+# Compile a source file to bytecode
+just compile [FILE]
+
+# Run the bytecode interpreter with a bytecode text file as input
+just vm [FILE]
 ```
 
 ## Benchmarking
