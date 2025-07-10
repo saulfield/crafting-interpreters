@@ -106,15 +106,15 @@ let emit_bytecode ops =
   let filename = "out.byte" in
   let ch = open_out filename in
   List.iter (fun op -> emit ch op) ops;
-  close_out ch;
-  print_endline ("Compiled to: " ^ filename)
+  close_out ch
+(* print_endline ("Compiled to: " ^ filename) *)
 
 let run filename =
   let src = read_file filename in
   let ast = parse src in
-  (* List.iter (fun stmt -> print_endline (Ast.show_stmt stmt)) ast; *)
   let bytecode = compile ast in
-  List.iter (fun op -> print_endline (string_of_op op)) bytecode;
+  (* List.iter (fun stmt -> print_endline (Ast.show_stmt stmt)) ast; *)
+  (* List.iter (fun op -> print_endline (string_of_op op)) bytecode; *)
   emit_bytecode bytecode
 
 let main args =

@@ -1,10 +1,10 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const Lox = @import("lox.zig");
-const Chunk = @import("chunk.zig").Chunk;
-const Value = Lox.Value;
-const Opcode = Lox.Opcode;
+const Bytecode = @import("bytecode.zig");
+const Chunk = Bytecode.Chunk;
+const Value = Bytecode.Value;
+const Opcode = Bytecode.Opcode;
 
 pub const InterpretResult = enum {
     ok,

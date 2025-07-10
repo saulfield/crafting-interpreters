@@ -28,6 +28,9 @@ just compile [FILE]
 
 # Run the bytecode interpreter with a bytecode text file as input
 just vm [FILE]
+
+# Compile and run a program with the bytecode interpreter
+just vm-run examples/operators.lox
 ```
 
 ## Benchmarking

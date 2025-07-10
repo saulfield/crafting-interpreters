@@ -1,27 +1,12 @@
 const std = @import("std");
-const stdout = std.io.getStdOut().writer();
 const Allocator = std.mem.Allocator;
+const stdout = std.io.getStdOut().writer();
 
-const Lox = @import("lox.zig");
-const Chunk = @import("chunk.zig").Chunk;
+const Bytecode = @import("bytecode.zig");
 const VM = @import("vm.zig").VM;
-const Value = Lox.Value;
-const Opcode = Lox.Opcode;
-
-fn loadBytecode(chunk: *Chunk, src: []u8) !void {
-    _ = src;
-
-    try chunk.writeChunk(@intFromEnum(Opcode.op_constant));
-    try chunk.writeChunk(try chunk.addConstant(Value{ .num = 1.2 }));
-    try chunk.writeChunk(@intFromEnum(Opcode.op_constant));
-    try chunk.writeChunk(try chunk.addConstant(Value{ .num = 3.4 }));
-    try chunk.writeChunk(@intFromEnum(Opcode.op_add));
-    try chunk.writeChunk(@intFromEnum(Opcode.op_constant));
-    try chunk.writeChunk(try chunk.addConstant(Value{ .num = 5.6 }));
-    try chunk.writeChunk(@intFromEnum(Opcode.op_divide));
-    try chunk.writeChunk(@intFromEnum(Opcode.op_negate));
-    try chunk.writeChunk(@intFromEnum(Opcode.op_return));
-}
+const Chunk = Bytecode.Chunk;
+const Value = Bytecode.Value;
+const Opcode = Bytecode.Opcode;
 
 fn runFile(allocator: Allocator, path: []const u8) !void {
     // read bytecode text file
@@ -33,13 +18,13 @@ fn runFile(allocator: Allocator, path: []const u8) !void {
     // load bytecode
     var chunk = Chunk.init(allocator);
     defer chunk.deinit();
-    try loadBytecode(&chunk, src);
-    chunk.disassemble();
+    try chunk.load(src);
+    // chunk.disassemble();
 
     // run interpreter
     var vm = VM.init(allocator);
     const result = vm.interpret(&chunk);
-    std.debug.print("{any}\n", .{result});
+    _ = result;
 }
 
 pub fn main() !void {

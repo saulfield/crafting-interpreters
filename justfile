@@ -19,5 +19,8 @@ default:
 @vm *FILE:
     ( cd vm ; zig build ) ; ./vm/zig-out/bin/vm {{FILE}}
 
+@vm-run *FILE:
+    just compile {{FILE}} && ./vm/zig-out/bin/vm "out.byte"
+
 @old-vm:
     ( cd runtime ; make clean all > /dev/null ; ./build/main )
