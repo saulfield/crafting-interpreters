@@ -81,7 +81,7 @@ pub const Value = union(enum) {
             .bool => a.bool == b.bool,
             .num => a.num == b.num,
             .nil => true,
-            .obj => std.mem.eql(u8, a.obj.data.str, b.obj.data.str),
+            .obj => a.obj == b.obj,
         };
     }
 
@@ -179,7 +179,7 @@ pub fn load(chunk: *Chunk, gc: *GC, src: []u8) !void {
                     std.debug.assert(src[curr] == '"');
                     curr += 1;
                     const str = try scanString(src, &curr);
-                    const gcStr = try gc.createCopiedString(str);
+                    const gcStr = try gc.allocAndCopyString(str);
                     const strObject = try gc.createStrObject(gcStr);
                     try chunk.writeConstant(Value.fromObj(strObject));
                 }

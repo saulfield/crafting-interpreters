@@ -13,22 +13,25 @@ pub const GC = struct {
 
     allocator: std.mem.Allocator,
     objects: std.ArrayList(*Object),
+    strings: std.StringHashMap(*Object),
 
     pub fn init(allocator: std.mem.Allocator) GC {
         return GC{
             .allocator = allocator,
             .objects = std.ArrayList(*Object).init(allocator),
+            .strings = std.StringHashMap(*Object).init(allocator),
         };
     }
 
     pub fn deinit(self: *GC) void {
         for (self.objects.items) |object| {
             switch (object.*.data) {
-                .str => |s| self.allocator.free(s),
+                .str => |str| self.allocator.free(str),
             }
             self.allocator.destroy(object);
         }
         self.objects.deinit();
+        self.strings.deinit();
     }
 
     pub fn createObject(self: *GC) !*Object {
@@ -37,17 +40,22 @@ pub const GC = struct {
         return object;
     }
 
-    pub fn createCopiedString(self: *GC, str: []u8) ![]u8 {
+    pub fn allocAndCopyString(self: *GC, str: []u8) ![]u8 {
         return try self.allocator.dupe(u8, str);
     }
 
-    pub fn createString(self: *GC, len: usize) ![]u8 {
+    pub fn allocString(self: *GC, len: usize) ![]u8 {
         return try self.allocator.alloc(u8, len);
     }
 
     pub fn createStrObject(self: *GC, str: []u8) !*Object {
-        var object = try self.createObject();
-        object.data.str = str;
-        return object;
+        if (self.strings.get(str)) |strObj| {
+            self.allocator.free(str);
+            return strObj;
+        }
+        var strObj = try self.createObject();
+        strObj.data.str = str;
+        try self.strings.put(str, strObj);
+        return strObj;
     }
 };

@@ -116,7 +116,7 @@ pub const VM = struct {
                     } else if (self.peek(0).isStr() and self.peek(1).isStr()) {
                         const b = self.pop().obj.data.str;
                         const a = self.pop().obj.data.str;
-                        const newStr = try self.gc.createString(a.len + b.len);
+                        const newStr = try self.gc.allocString(a.len + b.len);
                         std.mem.copyForwards(u8, newStr, a);
                         std.mem.copyForwards(u8, newStr[a.len..], b);
                         const strObj = try self.gc.createStrObject(newStr);
