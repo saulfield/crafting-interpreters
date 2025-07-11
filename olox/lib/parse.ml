@@ -297,7 +297,7 @@ and parse_var_decl ps =
     if match_tokens ps [ Token.Equal ] then Some (parse_expr ps) else None
   in
   consume ps Token.Semicolon "Expect ';' after variable declaration.";
-  STMT_Var (ident, init_expr)
+  STMT_VarDecl (ident, init_expr)
 
 and parse_declaration ps =
   if match_tokens ps [ Token.KWFun ] then parse_fun_decl ps

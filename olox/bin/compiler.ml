@@ -8,6 +8,10 @@ type bytecode_op =
   | OP_NIL
   | OP_TRUE
   | OP_FALSE
+  | OP_POP
+  | OP_DEFINE_GLOBAL of string
+  | OP_GET_GLOBAL of string
+  | OP_SET_GLOBAL of string
   | OP_EQUAL
   | OP_GREATER
   | OP_LESS
@@ -17,7 +21,8 @@ type bytecode_op =
   | OP_DIV
   | OP_NOT
   | OP_NEG
-  | OP_RETURN
+  | OP_PRINT
+  | OP_RET
 [@@deriving show]
 
 let string_of_op op =
@@ -27,6 +32,10 @@ let string_of_op op =
   | OP_NIL -> "PUSH_NIL"
   | OP_TRUE -> "PUSH_TRUE"
   | OP_FALSE -> "PUSH_FALSE"
+  | OP_POP -> "POP"
+  | OP_DEFINE_GLOBAL s -> Printf.sprintf "DEFINE_GLOBAL \"%s\"" s
+  | OP_GET_GLOBAL s -> Printf.sprintf "GET_GLOBAL \"%s\"" s
+  | OP_SET_GLOBAL s -> Printf.sprintf "SET_GLOBAL \"%s\"" s
   | OP_EQUAL -> "EQ"
   | OP_GREATER -> "GT"
   | OP_LESS -> "LT"
@@ -36,7 +45,8 @@ let string_of_op op =
   | OP_DIV -> "DIV"
   | OP_NOT -> "NOT"
   | OP_NEG -> "NEG"
-  | OP_RETURN -> "RET"
+  | OP_PRINT -> "PRINT"
+  | OP_RET -> "RET"
 
 let read_file filename =
   let ch = open_in_bin filename in
@@ -78,26 +88,40 @@ let compile_binary op =
 
 let rec compile_expr expr =
   match expr with
-  (* | EXPR_Assign (var, expr) -> failwith "" *)
+  | EXPR_Literal lit -> [ compile_literal lit ]
+  | EXPR_Grouping inner -> compile_expr inner
+  | EXPR_Unary (op, inner) -> compile_expr inner @ [ compile_unary op ]
   | EXPR_Binary (lhs, op, rhs) ->
       compile_expr lhs @ compile_expr rhs @ compile_binary op
+  | EXPR_Assign (var, expr) -> compile_expr expr @ [ OP_SET_GLOBAL var.name ]
+  | EXPR_Variable var -> [ OP_GET_GLOBAL var.name ]
   (* | EXPR_Call (callee_expr, arg_exprs) -> failwith "" *)
-  | EXPR_Grouping inner -> compile_expr inner
   (* | EXPR_Logical (lhs, op, rhs) -> failwith "" *)
-  | EXPR_Literal lit -> [ compile_literal lit ]
-  | EXPR_Unary (op, inner) -> compile_expr inner @ [ compile_unary op ]
-  (* | EXPR_Variable var -> failwith "" *)
   | _ -> failwith ("Unimplemented expr" ^ show_expr expr)
 
 let compile_stmt stmt =
   match stmt with
-  | STMT_Print expr -> compile_expr expr @ [ OP_RETURN ]
+  | STMT_Print expr -> compile_expr expr @ [ OP_PRINT ]
+  | STMT_Expression expr -> compile_expr expr @ [ OP_POP ]
+  | STMT_VarDecl (name, init_expr) ->
+      let init_val =
+        match init_expr with
+        | None -> [ OP_NIL ]
+        | Some expr -> compile_expr expr
+      in
+      init_val @ [ OP_DEFINE_GLOBAL name ]
+  (* | STMT_Break -> _ *)
+  (* | STMT_Block -> _ *)
+  (* | STMT_Fun (_, _, _ -> _ *)
+  (* | STMT_If (_, _, _ -> _ *)
+  (* | STMT_While (_, _ -> _ *)
+  (* | STMT_Return -> _ *)
   | _ -> failwith ("Unimplemented stmt" ^ show_stmt stmt)
 
 let compile ast =
   let rec step ops stmts =
     match stmts with
-    | [] -> ops
+    | [] -> ops @ [ OP_RET ]
     | stmt :: rest -> ops @ step (compile_stmt stmt) rest
   in
   step [] ast

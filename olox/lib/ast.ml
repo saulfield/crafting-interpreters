@@ -46,7 +46,7 @@ type stmt =
   | STMT_While of expr * stmt
   | STMT_Return of expr option
   | STMT_Print of expr
-  | STMT_Var of string * expr option
+  | STMT_VarDecl of string * expr option
 [@@deriving show]
 
 (* Conversion *)

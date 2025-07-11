@@ -6,8 +6,6 @@ const GC = @import("gc.zig").GC;
 const VM = @import("vm.zig").VM;
 const Bytecode = @import("bytecode.zig");
 const Chunk = Bytecode.Chunk;
-const Value = Bytecode.Value;
-const Opcode = Bytecode.Opcode;
 
 fn runFile(allocator: Allocator, path: []const u8) !void {
     // read bytecode text file
@@ -27,7 +25,8 @@ fn runFile(allocator: Allocator, path: []const u8) !void {
     chunk.disassemble();
 
     // run interpreter
-    var vm = VM.init(&gc);
+    var vm = VM.init(allocator, &gc);
+    defer vm.deinit();
     const result = try vm.interpret(&chunk);
     _ = result;
 }

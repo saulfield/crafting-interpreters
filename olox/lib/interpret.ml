@@ -201,7 +201,7 @@ let rec eval_stmt state stmt =
       step ()
   | STMT_Print expr ->
       expr |> eval_expr state |> string_of_value |> print_endline
-  | STMT_Var (name, init_expr) -> eval_var_stmt state name init_expr
+  | STMT_VarDecl (name, init_expr) -> eval_var_stmt state name init_expr
   | STMT_Break -> raise BreakException
   | STMT_Return expr ->
       let return_val =

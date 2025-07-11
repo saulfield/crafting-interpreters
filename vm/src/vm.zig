@@ -19,16 +19,22 @@ pub const VM = struct {
     sp: usize,
     ip: usize,
     stack: [STACK_MAX]Value,
+    globals: std.StringHashMap(Value),
     chunk: *Chunk,
 
-    pub fn init(gc: *GC) VM {
+    pub fn init(allocator: Allocator, gc: *GC) VM {
         return .{
             .gc = gc,
             .sp = 0,
             .ip = 0,
             .stack = undefined,
+            .globals = std.StringHashMap(Value).init(allocator),
             .chunk = undefined,
         };
+    }
+
+    pub fn deinit(self: *VM) void {
+        self.globals.deinit();
     }
 
     pub fn peek(self: *VM, dist: usize) Value {
@@ -49,6 +55,11 @@ pub const VM = struct {
         const byte = self.chunk.*.code.items[self.ip];
         self.ip += 1;
         return byte;
+    }
+
+    fn readConst(self: *VM) Value {
+        const index = self.readByte();
+        return self.chunk.*.constants.items[index];
     }
 
     fn binOp(self: *VM, comptime T: type, opcode: Opcode) !void {
@@ -93,14 +104,35 @@ pub const VM = struct {
         while (true) {
             const opcode: Opcode = @enumFromInt(self.readByte());
             switch (opcode) {
-                .op_constant => {
-                    const index = self.readByte();
-                    const value = self.chunk.*.constants.items[index];
-                    self.push(value);
-                },
+                .op_constant => self.push(self.readConst()),
                 .op_nil => self.push(Value.fromNil()),
                 .op_true => self.push(Value.fromBool(true)),
                 .op_false => self.push(Value.fromBool(false)),
+                .op_pop => _ = self.pop(),
+                .op_define_global => {
+                    const name = self.readConst().obj.data.str;
+                    try self.globals.put(name, self.peek(0));
+                    _ = self.pop();
+                },
+                .op_get_global => {
+                    const name = self.readConst().obj.data.str;
+                    if (self.globals.get(name)) |value| {
+                        self.push(value);
+                    } else {
+                        // TODO: print name in error message
+                        self.runtimeError("Undefined variable.");
+                        return .runtime_error;
+                    }
+                },
+                .op_set_global => {
+                    const name = self.readConst().obj.data.str;
+                    if (self.globals.get(name) == null) {
+                        // TODO: print name in error message
+                        self.runtimeError("Undefined variable.");
+                        return .runtime_error;
+                    }
+                    try self.globals.put(name, self.peek(0));
+                },
                 .op_equal => {
                     const b = self.pop();
                     const a = self.pop();
@@ -138,9 +170,11 @@ pub const VM = struct {
                     const value = self.pop();
                     self.push(Value.fromNum(-value.num));
                 },
-                .op_return => {
+                .op_print => {
                     self.pop().print();
                     std.debug.print("\n", .{});
+                },
+                .op_return => {
                     return .ok;
                 },
             }

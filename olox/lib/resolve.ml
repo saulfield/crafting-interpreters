@@ -105,7 +105,7 @@ let rec resolve_stmt rs stmt =
       match expr with
       | Some expr -> resolve_expr rs expr
       | None -> ())
-  | STMT_Var (name, init) ->
+  | STMT_VarDecl (name, init) ->
       declare rs name;
       (match init with
       | Some expr -> resolve_expr rs expr

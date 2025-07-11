@@ -13,6 +13,10 @@ pub const Opcode = enum(u8) {
     op_nil,
     op_true,
     op_false,
+    op_pop,
+    op_define_global,
+    op_get_global,
+    op_set_global,
     op_equal,
     op_greater,
     op_less,
@@ -22,12 +26,20 @@ pub const Opcode = enum(u8) {
     op_divide,
     op_not,
     op_negate,
+    op_print,
     op_return,
 
     pub fn print(opcode: Opcode) void {
         var buf: [16]u8 = undefined;
         const str = std.ascii.upperString(&buf, @tagName(opcode));
         std.debug.print("{s}", .{str});
+    }
+
+    pub fn hasOperand(opcode: Opcode) bool {
+        return switch (opcode) {
+            .op_constant, .op_define_global, .op_get_global, .op_set_global => true,
+            else => false,
+        };
     }
 };
 
@@ -104,6 +116,10 @@ const KEYWORDS = std.StaticStringMap(Opcode).initComptime(.{
     .{ "PUSH_NIL", .op_nil },
     .{ "PUSH_TRUE", .op_true },
     .{ "PUSH_FALSE", .op_false },
+    .{ "POP", .op_pop },
+    .{ "DEFINE_GLOBAL", .op_define_global },
+    .{ "GET_GLOBAL", .op_get_global },
+    .{ "SET_GLOBAL", .op_set_global },
     .{ "EQ", .op_equal },
     .{ "GT", .op_greater },
     .{ "LT", .op_less },
@@ -113,6 +129,7 @@ const KEYWORDS = std.StaticStringMap(Opcode).initComptime(.{
     .{ "DIV", .op_divide },
     .{ "NOT", .op_not },
     .{ "NEG", .op_negate },
+    .{ "PRINT", .op_print },
     .{ "RET", .op_return },
 });
 
@@ -166,7 +183,7 @@ pub fn load(chunk: *Chunk, gc: *GC, src: []u8) !void {
             ' ', '\n' => {},
             'A'...'Z' => {
                 const opcode = scanOpcode(src, &curr);
-                if (opcode != Opcode.op_constant) {
+                if (!opcode.hasOperand()) {
                     try chunk.writeOpcode(opcode);
                     continue;
                 }
@@ -174,14 +191,14 @@ pub fn load(chunk: *Chunk, gc: *GC, src: []u8) !void {
                 curr += 1; // skip space
                 if (isDigit(src[curr])) {
                     const num = try scanNumber(src, &curr);
-                    try chunk.writeConstant(Value.fromNum(num));
+                    try chunk.writeConstInstr(Value.fromNum(num), opcode);
                 } else {
                     std.debug.assert(src[curr] == '"');
                     curr += 1;
                     const str = try scanString(src, &curr);
                     const gcStr = try gc.allocAndCopyString(str);
                     const strObject = try gc.createStrObject(gcStr);
-                    try chunk.writeConstant(Value.fromObj(strObject));
+                    try chunk.writeConstInstr(Value.fromObj(strObject), opcode);
                 }
             },
             else => return error.UnexpectedCharacter,
@@ -209,9 +226,9 @@ pub const Chunk = struct {
         try self.writeChunk(@intFromEnum(opcode));
     }
 
-    fn writeConstant(self: *Chunk, value: Value) !void {
+    fn writeConstInstr(self: *Chunk, value: Value, opcode: Opcode) !void {
         const index = try self.addConstant(value);
-        try self.writeOpcode(Opcode.op_constant);
+        try self.writeOpcode(opcode);
         try self.writeChunk(index);
     }
 
@@ -230,8 +247,8 @@ pub const Chunk = struct {
         while (i < self.code.items.len) {
             const byte = self.code.items[i];
             const opcode: Opcode = @enumFromInt(byte);
-            switch (opcode) {
-                .op_constant => {
+            switch (opcode.hasOperand()) {
+                true => {
                     const constIndex = self.code.items[i + 1];
                     const value: Value = self.constants.items[constIndex];
                     opcode.print();
@@ -240,7 +257,7 @@ pub const Chunk = struct {
                     std.debug.print("\n", .{});
                     i += 2;
                 },
-                else => {
+                false => {
                     opcode.print();
                     std.debug.print("\n", .{});
                     i += 1;
