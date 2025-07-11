@@ -3,7 +3,8 @@ open Olox
 open Ast
 
 type bytecode_op =
-  | OP_CONSTANT of float
+  | OP_CONST_NUM of float
+  | OP_CONST_STR of string
   | OP_NIL
   | OP_TRUE
   | OP_FALSE
@@ -21,7 +22,8 @@ type bytecode_op =
 
 let string_of_op op =
   match op with
-  | OP_CONSTANT f -> Printf.sprintf "CONST %g" f
+  | OP_CONST_NUM f -> Printf.sprintf "CONST %g" f
+  | OP_CONST_STR s -> Printf.sprintf "CONST \"%s\"" s
   | OP_NIL -> "PUSH_NIL"
   | OP_TRUE -> "PUSH_TRUE"
   | OP_FALSE -> "PUSH_FALSE"
@@ -50,11 +52,11 @@ let parse src =
 
 let compile_literal lit =
   match lit with
-  | LIT_number n -> OP_CONSTANT n
+  | LIT_number n -> OP_CONST_NUM n
+  | LIT_string s -> OP_CONST_STR s
   | LIT_bool true -> OP_TRUE
   | LIT_bool false -> OP_FALSE
   | LIT_nil -> OP_NIL
-  | LIT_string _s -> failwith "Strings not yet implemented."
 
 let compile_unary op =
   match op with

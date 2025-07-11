@@ -14,15 +14,13 @@ pub const InterpretResult = enum {
 
 const STACK_MAX = 256;
 pub const VM = struct {
-    allocator: Allocator,
     sp: usize,
     ip: usize,
     stack: [STACK_MAX]Value,
     chunk: *Chunk,
 
-    pub fn init(allocator: Allocator) VM {
+    pub fn init() VM {
         return .{
-            .allocator = allocator,
             .sp = 0,
             .ip = 0,
             .stack = undefined,

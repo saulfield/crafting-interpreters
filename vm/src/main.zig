@@ -2,8 +2,9 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const stdout = std.io.getStdOut().writer();
 
-const Bytecode = @import("bytecode.zig");
+const GC = @import("gc.zig").GC;
 const VM = @import("vm.zig").VM;
+const Bytecode = @import("bytecode.zig");
 const Chunk = Bytecode.Chunk;
 const Value = Bytecode.Value;
 const Opcode = Bytecode.Opcode;
@@ -15,14 +16,18 @@ fn runFile(allocator: Allocator, path: []const u8) !void {
     const src = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
     defer allocator.free(src);
 
+    // init GC
+    var gc = GC.init(allocator);
+    defer gc.deinit();
+
     // load bytecode
     var chunk = Chunk.init(allocator);
+    try Bytecode.load(&chunk, &gc, src);
     defer chunk.deinit();
-    try chunk.load(src);
-    // chunk.disassemble();
+    chunk.disassemble();
 
     // run interpreter
-    var vm = VM.init(allocator);
+    var vm = VM.init();
     const result = vm.interpret(&chunk);
     _ = result;
 }

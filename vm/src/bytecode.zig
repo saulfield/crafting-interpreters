@@ -4,6 +4,9 @@ const ArrayList = std.ArrayList;
 const isDigit = std.ascii.isDigit;
 const activeTag = std.meta.activeTag;
 
+const GC = @import("gc.zig").GC;
+const Object = GC.Object;
+
 pub const Opcode = enum(u8) {
     op_constant,
     op_nil,
@@ -31,6 +34,7 @@ pub const Value = union(enum) {
     bool: bool,
     num: f64,
     nil: bool, // TODO: find a more idiomatic way for doing this
+    obj: *Object,
 
     pub fn fromNum(num: f64) Value {
         return .{ .num = num };
@@ -65,6 +69,7 @@ pub const Value = union(enum) {
             .bool => a.bool == b.bool,
             .num => a.num == b.num,
             .nil => true,
+            .obj => unreachable, // TODO
         };
     }
 
@@ -73,6 +78,11 @@ pub const Value = union(enum) {
             .bool => |b| std.debug.print("{any}", .{b}),
             .num => |num| std.debug.print("{d}", .{num}),
             .nil => std.debug.print("nil", .{}),
+            .obj => |obj| {
+                switch (obj.*.data) {
+                    .str => |s| std.debug.print("\"{s}\"", .{s}),
+                }
+            },
         }
     }
 };
@@ -125,6 +135,47 @@ fn scanNumber(src: []u8, curr: *usize) !f64 {
     return try std.fmt.parseFloat(f64, str);
 }
 
+fn scanString(src: []u8, curr: *usize) ![]u8 {
+    const start: usize = curr.*;
+    while (curr.* < src.len and src[curr.*] != '"') {
+        curr.* += 1;
+    }
+    const str = src[start..curr.*];
+    curr.* += 1;
+    return str;
+}
+
+pub fn load(chunk: *Chunk, gc: *GC, src: []u8) !void {
+    var curr: usize = 0;
+    while (curr < src.len) {
+        const c = src[curr];
+        curr += 1;
+        switch (c) {
+            ' ', '\n' => {},
+            'A'...'Z' => {
+                const opcode = scanOpcode(src, &curr);
+                if (opcode != Opcode.op_constant) {
+                    try chunk.writeOpcode(opcode);
+                    continue;
+                }
+
+                curr += 1; // skip space
+                if (isDigit(src[curr])) {
+                    const num = try scanNumber(src, &curr);
+                    try chunk.writeConstant(Value{ .num = num });
+                } else {
+                    std.debug.assert(src[curr] == '"');
+                    curr += 1;
+                    const str = try scanString(src, &curr);
+                    const strObject = try gc.createStrObject(str);
+                    try chunk.writeConstant(Value{ .obj = strObject });
+                }
+            },
+            else => return error.UnexpectedCharacter,
+        }
+    }
+}
+
 pub const Chunk = struct {
     code: ArrayList(u8),
     constants: ArrayList(Value),
@@ -159,28 +210,6 @@ pub const Chunk = struct {
         try self.constants.append(value);
         const index: u8 = @intCast(self.constants.items.len - 1);
         return index;
-    }
-
-    pub fn load(self: *Chunk, src: []u8) !void {
-        var curr: usize = 0;
-        while (curr < src.len) {
-            const c = src[curr];
-            curr += 1;
-            switch (c) {
-                ' ', '\n' => {},
-                'A'...'Z' => {
-                    const opcode = scanOpcode(src, &curr);
-                    if (opcode == Opcode.op_constant) {
-                        curr += 1;
-                        const num = try scanNumber(src, &curr);
-                        try self.writeConstant(Value{ .num = num });
-                    } else {
-                        try self.writeOpcode(opcode);
-                    }
-                },
-                else => return error.UnexpectedCharacter,
-            }
-        }
     }
 
     pub fn disassemble(self: *Chunk) void {
