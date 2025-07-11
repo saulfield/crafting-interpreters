@@ -2,7 +2,8 @@
 
 ## Dependencies
 
-- OCaml (for the tree-walk interpreter)
+- OCaml (for the tree-walk interpreter and bytecode compiler)
+- Zig (for the bytecode VM)
 - [Optional] Python and [uv](https://docs.astral.sh/uv) for the test suite runner
 
 ## Run
@@ -26,11 +27,15 @@ just test
 # Compile a source file to bytecode
 just compile [FILE]
 
-# Run the bytecode interpreter with a bytecode text file as input
-just vm [FILE]
+# Build the bytecode interpreter
+just vm-build:
+    ( cd vm ; zig build )
+
+# Build and run the bytecode interpreter
+just vm
 
 # Compile and run a program with the bytecode interpreter
-just vm-run examples/operators.lox
+just ozlox examples/operators.lox
 ```
 
 ## Benchmarking

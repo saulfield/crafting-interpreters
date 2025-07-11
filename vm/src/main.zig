@@ -27,8 +27,8 @@ fn runFile(allocator: Allocator, path: []const u8) !void {
     chunk.disassemble();
 
     // run interpreter
-    var vm = VM.init();
-    const result = vm.interpret(&chunk);
+    var vm = VM.init(&gc);
+    const result = try vm.interpret(&chunk);
     _ = result;
 }
 

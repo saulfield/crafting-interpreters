@@ -1,7 +1,7 @@
 default:
   @just --list
 
-@run *FILE:
+@olox *FILE:
     ./olox/_build/default/bin/main.exe {{FILE}}
 
 @compile *FILE:
@@ -16,10 +16,13 @@ default:
 @test: build
     uv run tools/run_tests.py
 
-@vm *FILE:
-    ( cd vm ; zig build ) ; ./vm/zig-out/bin/vm {{FILE}}
+@vm-build:
+    ( cd vm ; zig build )
 
-@vm-run *FILE:
+@vm: vm-build
+    ./vm/zig-out/bin/vm "out.byte"
+
+@ozlox *FILE:
     just compile {{FILE}} && ./vm/zig-out/bin/vm "out.byte"
 
 @old-vm:

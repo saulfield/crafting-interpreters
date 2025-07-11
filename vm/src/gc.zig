@@ -1,8 +1,12 @@
 const std = @import("std");
 
 pub const GC = struct {
+    pub const ObjType = enum {
+        str,
+    };
+
     pub const Object = struct {
-        data: union(enum) {
+        data: union(ObjType) {
             str: []u8,
         },
     };
@@ -33,10 +37,17 @@ pub const GC = struct {
         return object;
     }
 
+    pub fn createCopiedString(self: *GC, str: []u8) ![]u8 {
+        return try self.allocator.dupe(u8, str);
+    }
+
+    pub fn createString(self: *GC, len: usize) ![]u8 {
+        return try self.allocator.alloc(u8, len);
+    }
+
     pub fn createStrObject(self: *GC, str: []u8) !*Object {
         var object = try self.createObject();
-        const copiedStr = try self.allocator.dupe(u8, str);
-        object.data.str = copiedStr;
+        object.data.str = str;
         return object;
     }
 };

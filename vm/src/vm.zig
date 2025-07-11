@@ -1,6 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
+const GC = @import("gc.zig").GC;
 const Bytecode = @import("bytecode.zig");
 const Chunk = Bytecode.Chunk;
 const Value = Bytecode.Value;
@@ -14,13 +15,15 @@ pub const InterpretResult = enum {
 
 const STACK_MAX = 256;
 pub const VM = struct {
+    gc: *GC,
     sp: usize,
     ip: usize,
     stack: [STACK_MAX]Value,
     chunk: *Chunk,
 
-    pub fn init() VM {
+    pub fn init(gc: *GC) VM {
         return .{
+            .gc = gc,
             .sp = 0,
             .ip = 0,
             .stack = undefined,
@@ -84,7 +87,7 @@ pub const VM = struct {
         self.sp = 0; // reset stack
     }
 
-    pub fn interpret(self: *VM, chunk: *Chunk) InterpretResult {
+    pub fn interpret(self: *VM, chunk: *Chunk) !InterpretResult {
         self.ip = 0;
         self.chunk = chunk;
         while (true) {
@@ -104,7 +107,25 @@ pub const VM = struct {
                     self.push(Value.fromBool(Value.equal(a, b)));
                 },
                 .op_greater, .op_less => self.binOp(bool, opcode) catch return .runtime_error,
-                .op_add, .op_subtract, .op_multiply, .op_divide => self.binOp(f64, opcode) catch return .runtime_error,
+                .op_subtract, .op_multiply, .op_divide => self.binOp(f64, opcode) catch return .runtime_error,
+                .op_add => {
+                    if (self.peek(0).isNum() and self.peek(1).isNum()) {
+                        const b = self.pop().num;
+                        const a = self.pop().num;
+                        self.push(Value.fromNum(a + b));
+                    } else if (self.peek(0).isStr() and self.peek(1).isStr()) {
+                        const b = self.pop().obj.data.str;
+                        const a = self.pop().obj.data.str;
+                        const newStr = try self.gc.createString(a.len + b.len);
+                        std.mem.copyForwards(u8, newStr, a);
+                        std.mem.copyForwards(u8, newStr[a.len..], b);
+                        const strObj = try self.gc.createStrObject(newStr);
+                        self.push(Value.fromObj(strObj));
+                    } else {
+                        self.runtimeError("Operands must be two numbers or two strings.");
+                        return .runtime_error;
+                    }
+                },
                 .op_not => {
                     const value = self.pop();
                     self.push(Value.fromBool(value.isFalsey()));
@@ -112,7 +133,7 @@ pub const VM = struct {
                 .op_negate => {
                     if (!self.peek(0).isNum()) {
                         self.runtimeError("Operand must be a number.");
-                        return InterpretResult.runtime_error;
+                        return .runtime_error;
                     }
                     const value = self.pop();
                     self.push(Value.fromNum(-value.num));
@@ -120,7 +141,7 @@ pub const VM = struct {
                 .op_return => {
                     self.pop().print();
                     std.debug.print("\n", .{});
-                    return InterpretResult.ok;
+                    return .ok;
                 },
             }
         }

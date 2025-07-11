@@ -5,6 +5,7 @@ const isDigit = std.ascii.isDigit;
 const activeTag = std.meta.activeTag;
 
 const GC = @import("gc.zig").GC;
+const ObjType = GC.ObjType;
 const Object = GC.Object;
 
 pub const Opcode = enum(u8) {
@@ -48,9 +49,20 @@ pub const Value = union(enum) {
         return .{ .nil = true };
     }
 
+    pub fn fromObj(obj: *Object) Value {
+        return .{ .obj = obj };
+    }
+
     pub fn isNum(self: Value) bool {
         return switch (self) {
             .num => true,
+            else => false,
+        };
+    }
+
+    pub fn isStr(self: Value) bool {
+        return switch (self) {
+            .obj => |obj| activeTag(obj.data) == ObjType.str,
             else => false,
         };
     }
@@ -69,7 +81,7 @@ pub const Value = union(enum) {
             .bool => a.bool == b.bool,
             .num => a.num == b.num,
             .nil => true,
-            .obj => unreachable, // TODO
+            .obj => std.mem.eql(u8, a.obj.data.str, b.obj.data.str),
         };
     }
 
@@ -162,13 +174,14 @@ pub fn load(chunk: *Chunk, gc: *GC, src: []u8) !void {
                 curr += 1; // skip space
                 if (isDigit(src[curr])) {
                     const num = try scanNumber(src, &curr);
-                    try chunk.writeConstant(Value{ .num = num });
+                    try chunk.writeConstant(Value.fromNum(num));
                 } else {
                     std.debug.assert(src[curr] == '"');
                     curr += 1;
                     const str = try scanString(src, &curr);
-                    const strObject = try gc.createStrObject(str);
-                    try chunk.writeConstant(Value{ .obj = strObject });
+                    const gcStr = try gc.createCopiedString(str);
+                    const strObject = try gc.createStrObject(gcStr);
+                    try chunk.writeConstant(Value.fromObj(strObject));
                 }
             },
             else => return error.UnexpectedCharacter,
