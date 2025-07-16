@@ -2,7 +2,7 @@
 open Ast
 open Printf
 
-type arg = ARG_const of Ast.literal | ARG_var of string [@@deriving show]
+type arg = ARG_const of Interpret.value | ARG_var of string [@@deriving show]
 
 type inst =
   | INST_return
@@ -16,7 +16,7 @@ type ir_state = { mutable instrs : inst Queue.t; mutable id : int }
 
 let string_of_arg arg =
   match arg with
-  | ARG_const lit -> string_of_literal lit
+  | ARG_const value -> Interpret.string_of_value value
   | ARG_var name -> name
 
 let string_of_inst inst =
@@ -41,7 +41,7 @@ let add_instr ir inst = Queue.add inst ir.instrs
 
 let rec compile_expr ir expr =
   match expr with
-  | EXPR_Literal lit -> ARG_const lit
+  | EXPR_Literal lit -> ARG_const (Interpret.eval_literal lit)
   | EXPR_Grouping inner -> compile_expr ir inner
   | EXPR_Unary (op, inner) ->
       let v1 = compile_expr ir inner in

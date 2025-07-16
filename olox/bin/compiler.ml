@@ -16,11 +16,14 @@ let run filename =
   let src = read_file filename in
   let ast = parse src in
   (* List.iter (fun stmt -> print_endline (Ast.show_stmt stmt)) ast; *)
-  (* let bytecode = Bytecode.compile ast in *)
+  let bytecode = Bytecode.compile ast in
   (* List.iter (fun op -> print_endline (Bytecode.string_of_op op)) bytecode; *)
-  (* Bytecode.emit bytecode *)
-  let ir = Ir.compile ast in
-  List.iter (fun inst -> print_endline (Ir.string_of_inst inst)) ir
+  Bytecode.emit bytecode;
+  (* let ir = Ir.compile ast in *)
+  (* List.iter (fun inst -> print_endline (Ir.string_of_inst inst)) ir; *)
+  (* let ir_optimized = Optimize.optimize ir in *)
+  (* List.iter (fun inst -> print_endline (Ir.string_of_inst inst)) ir_optimized; *)
+  ()
 
 let main args =
   match Array.length args with

@@ -127,11 +127,14 @@ and assign_var state var expr =
   env_assign env var.name value;
   value
 
-and eval_unary env op expr =
-  let v = eval_expr env expr in
+and eval_unary_val op v =
   match op with
   | UNOP_neg -> Number (Float.neg (check_num v))
   | UNOP_not -> Bool (not (is_truthy v))
+
+and eval_unary env op expr =
+  let v = eval_expr env expr in
+  eval_unary_val op v
 
 and num_op f lval rval = f (check_num lval) (check_num rval)
 
@@ -143,9 +146,7 @@ and eval_add lval rval =
   | other, String rstr -> String (string_of_value other ^ rstr) *)
   | _ -> failwith "Operands must be two numbers or two strings."
 
-and eval_binary env lhs op rhs =
-  let lval = eval_expr env lhs in
-  let rval = eval_expr env rhs in
+and eval_binary_val op lval rval =
   match op with
   | BINOP_add -> eval_add lval rval
   | BINOP_sub -> Number (num_op Float.sub lval rval)
@@ -157,6 +158,11 @@ and eval_binary env lhs op rhs =
   | BINOP_le -> Bool (check_num lval <= check_num rval)
   | BINOP_eq -> Bool (is_equal lval rval)
   | BINOP_ne -> Bool (not (is_equal lval rval))
+
+and eval_binary env lhs op rhs =
+  let lval = eval_expr env lhs in
+  let rval = eval_expr env rhs in
+  eval_binary_val op lval rval
 
 and eval_logical env lhs op rhs =
   let lval = eval_expr env lhs in
