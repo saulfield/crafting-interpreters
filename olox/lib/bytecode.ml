@@ -2,6 +2,34 @@
 
 open Ast
 
+type local = { name : string; depth : int }
+
+type compile_state = {
+  scopes : (string, bool) Hashtbl.t Stack.t;
+  locals : local Stack.t;
+  mutable depth : int;
+}
+
+let global_cs =
+  { scopes = Stack.create (); locals = Stack.create (); depth = 0 }
+
+let begin_scope () =
+  Stack.push (Hashtbl.create 16) global_cs.scopes;
+  global_cs.depth <- global_cs.depth + 1
+
+let rec pop_locals i =
+  match Stack.top_opt global_cs.locals with
+  | Some local when local.depth = global_cs.depth ->
+      Stack.pop global_cs.locals |> ignore;
+      pop_locals i + 1
+  | _ -> i
+
+let end_scope () =
+  Stack.pop global_cs.scopes |> ignore;
+  let pop_count = pop_locals 0 in
+  global_cs.depth <- global_cs.depth - 1;
+  pop_count
+
 type bytecode_op =
   | OP_CONST_NUM of float
   | OP_CONST_STR of string
@@ -9,9 +37,11 @@ type bytecode_op =
   | OP_TRUE
   | OP_FALSE
   | OP_POP
-  | OP_DEFINE_GLOBAL of string
+  | OP_GET_LOCAL of int
+  | OP_SET_LOCAL of int
   | OP_GET_GLOBAL of string
   | OP_SET_GLOBAL of string
+  | OP_DEFINE_GLOBAL of string
   | OP_EQUAL
   | OP_GREATER
   | OP_LESS
@@ -33,9 +63,11 @@ let string_of_op op =
   | OP_TRUE -> "PUSH_TRUE"
   | OP_FALSE -> "PUSH_FALSE"
   | OP_POP -> "POP"
-  | OP_DEFINE_GLOBAL s -> Printf.sprintf "DEFINE_GLOBAL \"%s\"" s
+  | OP_GET_LOCAL i -> Printf.sprintf "GET_LOCAL %d" i
+  | OP_SET_LOCAL i -> Printf.sprintf "SET_LOCAL %d" i
   | OP_GET_GLOBAL s -> Printf.sprintf "GET_GLOBAL \"%s\"" s
   | OP_SET_GLOBAL s -> Printf.sprintf "SET_GLOBAL \"%s\"" s
+  | OP_DEFINE_GLOBAL s -> Printf.sprintf "DEFINE_GLOBAL \"%s\"" s
   | OP_EQUAL -> "EQ"
   | OP_GREATER -> "GT"
   | OP_LESS -> "LT"
@@ -74,6 +106,20 @@ let compile_binary op =
   | BINOP_le -> [ OP_GREATER; OP_NOT ]
   | BINOP_ge -> [ OP_LESS; OP_NOT ]
 
+let resolve_local name =
+  let n = Stack.length global_cs.locals in
+  let slot = ref (n - 1) in
+  let found = ref false in
+  let find_slot local =
+    if !found = true then ()
+    else
+      match local.name with
+      | loc_name when loc_name = name -> found := true
+      | _ -> slot := !slot - 1
+  in
+  Stack.iter find_slot global_cs.locals;
+  !slot
+
 let rec compile_expr expr =
   match expr with
   | EXPR_Literal lit -> [ compile_literal lit ]
@@ -81,25 +127,78 @@ let rec compile_expr expr =
   | EXPR_Unary (op, inner) -> compile_expr inner @ [ compile_unary op ]
   | EXPR_Binary (lhs, op, rhs) ->
       compile_expr lhs @ compile_expr rhs @ compile_binary op
-  | EXPR_Assign (var, expr) -> compile_expr expr @ [ OP_SET_GLOBAL var.name ]
-  | EXPR_Variable var -> [ OP_GET_GLOBAL var.name ]
+  | EXPR_Assign (var, expr) -> (
+      let rval = compile_expr expr in
+      match resolve_local var.name with
+      | -1 -> rval @ [ OP_SET_GLOBAL var.name ]
+      | slot -> rval @ [ OP_SET_LOCAL slot ])
+  | EXPR_Variable var -> (
+      match resolve_local var.name with
+      | -1 -> [ OP_GET_GLOBAL var.name ]
+      | slot -> [ OP_GET_LOCAL slot ])
   (* | EXPR_Call (callee_expr, arg_exprs) -> failwith "" *)
   (* | EXPR_Logical (lhs, op, rhs) -> failwith "" *)
   | _ -> failwith ("Unimplemented expr" ^ show_expr expr)
 
-let compile_stmt stmt =
+let add_local name =
+  if Stack.length global_cs.locals > 256 then
+    failwith "Too many local variables in function."
+  else Stack.push { name; depth = global_cs.depth } global_cs.locals
+
+let declare name =
+  if Stack.is_empty global_cs.scopes then () else add_local name
+
+let define name =
+  if Stack.is_empty global_cs.scopes then ()
+  else
+    let scope = Stack.top global_cs.scopes in
+    Hashtbl.add scope name true
+
+let check_initializer name =
+  if Stack.is_empty global_cs.scopes then ()
+  else
+    let scope = Stack.top global_cs.scopes in
+    match Hashtbl.find_opt scope name with
+    | Some false ->
+        Common.resolve_error name
+          "Can't read local variable in its own initializer."
+    | _ -> ()
+
+let compile_initializer expr =
+  match expr with
+  | None -> [ OP_NIL ]
+  | Some expr -> compile_expr expr
+
+let compile_var_decl name init_expr =
+  declare name;
+  let code = compile_initializer init_expr in
+  define name;
+  match global_cs.depth with
+  | 0 -> code @ [ OP_DEFINE_GLOBAL name ]
+  | _ -> code
+
+let compile_pops n =
+  let rec f acc i =
+    match i with
+    | 0 -> acc
+    | _ -> f (OP_POP :: acc) (i - 1)
+  in
+  f [] n
+
+let rec compile_stmt stmt =
   match stmt with
   | STMT_Print expr -> compile_expr expr @ [ OP_PRINT ]
   | STMT_Expression expr -> compile_expr expr @ [ OP_POP ]
-  | STMT_VarDecl (name, init_expr) ->
-      let init_val =
-        match init_expr with
-        | None -> [ OP_NIL ]
-        | Some expr -> compile_expr expr
+  | STMT_VarDecl (name, init_expr) -> compile_var_decl name init_expr
+  | STMT_Block stmts ->
+      let _ = begin_scope () in
+      let code =
+        List.fold_left (fun acc stmt -> acc @ compile_stmt stmt) [] stmts
       in
-      init_val @ [ OP_DEFINE_GLOBAL name ]
+      let pop_count = end_scope () in
+      let pop_instrs = compile_pops pop_count in
+      code @ pop_instrs
   (* | STMT_Break -> _ *)
-  (* | STMT_Block -> _ *)
   (* | STMT_Fun (_, _, _ -> _ *)
   (* | STMT_If (_, _, _ -> _ *)
   (* | STMT_While (_, _ -> _ *)
