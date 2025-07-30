@@ -109,10 +109,13 @@ pub const VM = struct {
                 .op_true => self.push(Value.fromBool(true)),
                 .op_false => self.push(Value.fromBool(false)),
                 .op_pop => _ = self.pop(),
-                .op_define_global => {
-                    const name = self.readConst().obj.data.str;
-                    try self.globals.put(name, self.peek(0));
-                    _ = self.pop();
+                .op_get_local => {
+                    const slot = self.readByte();
+                    self.push(self.stack[slot]);
+                },
+                .op_set_local => {
+                    const slot = self.readByte();
+                    self.stack[slot] = self.peek(0);
                 },
                 .op_get_global => {
                     const name = self.readConst().obj.data.str;
@@ -132,6 +135,11 @@ pub const VM = struct {
                         return .runtime_error;
                     }
                     try self.globals.put(name, self.peek(0));
+                },
+                .op_define_global => {
+                    const name = self.readConst().obj.data.str;
+                    try self.globals.put(name, self.peek(0));
+                    _ = self.pop();
                 },
                 .op_equal => {
                     const b = self.pop();

@@ -14,9 +14,11 @@ pub const Opcode = enum(u8) {
     op_true,
     op_false,
     op_pop,
-    op_define_global,
+    op_get_local,
+    op_set_local,
     op_get_global,
     op_set_global,
+    op_define_global,
     op_equal,
     op_greater,
     op_less,
@@ -37,7 +39,14 @@ pub const Opcode = enum(u8) {
 
     pub fn hasOperand(opcode: Opcode) bool {
         return switch (opcode) {
-            .op_constant, .op_define_global, .op_get_global, .op_set_global => true,
+            .op_constant, .op_define_global, .op_get_global, .op_set_global, .op_get_local, .op_set_local => true,
+            else => false,
+        };
+    }
+
+    pub fn isLocalInstr(opcode: Opcode) bool {
+        return switch (opcode) {
+            .op_get_local, .op_set_local => true,
             else => false,
         };
     }
@@ -117,9 +126,11 @@ const KEYWORDS = std.StaticStringMap(Opcode).initComptime(.{
     .{ "PUSH_TRUE", .op_true },
     .{ "PUSH_FALSE", .op_false },
     .{ "POP", .op_pop },
-    .{ "DEFINE_GLOBAL", .op_define_global },
+    .{ "GET_LOCAL", .op_get_local },
+    .{ "SET_LOCAL", .op_set_local },
     .{ "GET_GLOBAL", .op_get_global },
     .{ "SET_GLOBAL", .op_set_global },
+    .{ "DEFINE_GLOBAL", .op_define_global },
     .{ "EQ", .op_equal },
     .{ "GT", .op_greater },
     .{ "LT", .op_less },
@@ -164,6 +175,15 @@ fn scanNumber(src: []u8, curr: *usize) !f64 {
     return try std.fmt.parseFloat(f64, str);
 }
 
+fn scanByte(src: []u8, curr: *usize) !u8 {
+    const start: usize = curr.*;
+    while (curr.* < src.len and isDigit(src[curr.*])) {
+        curr.* += 1;
+    }
+    const str = src[start..curr.*];
+    return try std.fmt.parseInt(u8, str, 0);
+}
+
 fn scanString(src: []u8, curr: *usize) ![]u8 {
     const start: usize = curr.*;
     while (curr.* < src.len and src[curr.*] != '"') {
@@ -189,7 +209,11 @@ pub fn load(chunk: *Chunk, gc: *GC, src: []u8) !void {
                 }
 
                 curr += 1; // skip space
-                if (isDigit(src[curr])) {
+                if (opcode.isLocalInstr()) {
+                    const slot = try scanByte(src, &curr);
+                    try chunk.writeOpcode(opcode);
+                    try chunk.writeChunk(slot);
+                } else if (isDigit(src[curr])) {
                     const num = try scanNumber(src, &curr);
                     try chunk.writeConstInstr(Value.fromNum(num), opcode);
                 } else {
@@ -247,8 +271,13 @@ pub const Chunk = struct {
         while (i < self.code.items.len) {
             const byte = self.code.items[i];
             const opcode: Opcode = @enumFromInt(byte);
-            switch (opcode.hasOperand()) {
-                true => {
+            if (opcode.hasOperand()) {
+                if (opcode.isLocalInstr()) {
+                    const slot = self.code.items[i + 1];
+                    opcode.print();
+                    std.debug.print(" {d}\n", .{slot});
+                    i += 2;
+                } else {
                     const constIndex = self.code.items[i + 1];
                     const value: Value = self.constants.items[constIndex];
                     opcode.print();
@@ -256,12 +285,11 @@ pub const Chunk = struct {
                     value.print();
                     std.debug.print("\n", .{});
                     i += 2;
-                },
-                false => {
-                    opcode.print();
-                    std.debug.print("\n", .{});
-                    i += 1;
-                },
+                }
+            } else {
+                opcode.print();
+                std.debug.print("\n", .{});
+                i += 1;
             }
         }
     }
