@@ -1,0 +1,5 @@
+if (true)
+    print("condition was truthy");
+else {
+    print("falsey");
+}

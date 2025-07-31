@@ -52,6 +52,9 @@ type bytecode_op =
   | OP_NOT
   | OP_NEG
   | OP_PRINT
+  | OP_JUMP of int
+  | OP_JUMP_IF_FALSE of int
+  | OP_LOOP of int
   | OP_RET
 [@@deriving show]
 
@@ -78,6 +81,9 @@ let string_of_op op =
   | OP_NOT -> "NOT"
   | OP_NEG -> "NEG"
   | OP_PRINT -> "PRINT"
+  | OP_JUMP i -> Printf.sprintf "JUMP %d" i
+  | OP_JUMP_IF_FALSE i -> Printf.sprintf "JUMP_IF_FALSE %d" i
+  | OP_LOOP i -> Printf.sprintf "LOOP %d" i
   | OP_RET -> "RET"
 
 let compile_literal lit =
@@ -136,9 +142,25 @@ let rec compile_expr expr =
       match resolve_local var.name with
       | -1 -> [ OP_GET_GLOBAL var.name ]
       | slot -> [ OP_GET_LOCAL slot ])
+  | EXPR_Logical (lhs, op, rhs) -> (
+      match op with
+      | LOGOP_and -> compile_and lhs rhs
+      | LOGOP_or -> compile_or lhs rhs)
   (* | EXPR_Call (callee_expr, arg_exprs) -> failwith "" *)
-  (* | EXPR_Logical (lhs, op, rhs) -> failwith "" *)
   | _ -> failwith ("Unimplemented expr" ^ show_expr expr)
+
+and compile_and lhs rhs =
+  let lhs_code = compile_expr lhs in
+  let rhs_code = [ OP_POP ] @ compile_expr rhs in
+  let jump_code = [ OP_JUMP_IF_FALSE (List.length rhs_code) ] in
+  lhs_code @ jump_code @ rhs_code
+
+and compile_or lhs rhs =
+  let lhs_code = compile_expr lhs in
+  let rhs_code = [ OP_POP ] @ compile_expr rhs in
+  let jump_false = [ OP_JUMP_IF_FALSE 1 ] in
+  let jump_true = [ OP_JUMP (List.length rhs_code) ] in
+  lhs_code @ jump_false @ jump_true @ rhs_code
 
 let add_local name =
   if Stack.length global_cs.locals > 256 then
@@ -153,16 +175,6 @@ let define name =
   else
     let scope = Stack.top global_cs.scopes in
     Hashtbl.add scope name true
-
-let check_initializer name =
-  if Stack.is_empty global_cs.scopes then ()
-  else
-    let scope = Stack.top global_cs.scopes in
-    match Hashtbl.find_opt scope name with
-    | Some false ->
-        Common.resolve_error name
-          "Can't read local variable in its own initializer."
-    | _ -> ()
 
 let compile_initializer expr =
   match expr with
@@ -198,12 +210,39 @@ let rec compile_stmt stmt =
       let pop_count = end_scope () in
       let pop_instrs = compile_pops pop_count in
       code @ pop_instrs
-  (* | STMT_Break -> _ *)
+  | STMT_If (cond, then_stmt, else_stmt) -> compile_if cond then_stmt else_stmt
+  | STMT_While (cond, body) -> compile_while cond body
   (* | STMT_Fun (_, _, _ -> _ *)
-  (* | STMT_If (_, _, _ -> _ *)
-  (* | STMT_While (_, _ -> _ *)
   (* | STMT_Return -> _ *)
+  (* | STMT_Break -> _ *)
   | _ -> failwith ("Unimplemented stmt" ^ show_stmt stmt)
+
+and compile_if cond then_stmt else_stmt =
+  let cond_code = compile_expr cond in
+  let then_code = [ OP_POP ] @ compile_stmt then_stmt in
+  let else_code =
+    match else_stmt with
+    | Some stmt -> [ OP_POP ] @ compile_stmt stmt
+    | None -> [ OP_POP ]
+  in
+  let else_jump =
+    match else_stmt with
+    | Some _ -> [ OP_JUMP (List.length else_code) ]
+    | None -> []
+  in
+  let then_jump =
+    [ OP_JUMP_IF_FALSE (List.length then_code + List.length else_jump) ]
+  in
+  cond_code @ then_jump @ then_code @ else_jump @ else_code
+
+and compile_while cond body =
+  let cond_code = compile_expr cond in
+  let body_code = [ OP_POP ] @ compile_stmt body in
+  let jump_end = [ OP_JUMP_IF_FALSE (List.length body_code + 1) ] in
+  let jump_start =
+    [ OP_LOOP (List.length body_code + 2 + List.length cond_code) ]
+  in
+  cond_code @ jump_end @ body_code @ jump_start @ [ OP_POP ]
 
 let compile ast =
   let rec step ops stmts =
