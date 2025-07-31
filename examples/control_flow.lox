@@ -1,5 +1,11 @@
-if (true)
-    print("condition was truthy");
-else {
-    print("falsey");
+//if (false)
+//    print("condition was truthy");
+//else {
+//    print("falsey");
+//}
+
+var i = 0;
+while (i < 10) {
+    print(i);
+    i = i + 1;
 }

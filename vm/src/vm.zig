@@ -57,6 +57,13 @@ pub const VM = struct {
         return byte;
     }
 
+    fn readShort(self: *VM) u16 {
+        const upper = @as(u16, self.chunk.*.code.items[self.ip]);
+        const lower = @as(u16, self.chunk.*.code.items[self.ip + 1]);
+        self.ip += 2;
+        return (upper << 8) | lower;
+    }
+
     fn readConst(self: *VM) Value {
         const index = self.readByte();
         return self.chunk.*.constants.items[index];
@@ -181,6 +188,19 @@ pub const VM = struct {
                 .op_print => {
                     self.pop().print();
                     std.debug.print("\n", .{});
+                },
+                .op_jump => {
+                    const offset = self.readShort();
+                    self.ip += offset;
+                },
+                .op_jump_if_false => {
+                    const offset = self.readShort();
+                    if (self.peek(0).isFalsey())
+                        self.ip += offset;
+                },
+                .op_loop => {
+                    const offset = self.readShort();
+                    self.ip -= offset;
                 },
                 .op_return => {
                     return .ok;

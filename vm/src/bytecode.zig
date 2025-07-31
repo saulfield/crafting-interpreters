@@ -29,6 +29,9 @@ pub const Opcode = enum(u8) {
     op_not,
     op_negate,
     op_print,
+    op_jump,
+    op_jump_if_false,
+    op_loop,
     op_return,
 
     pub fn print(opcode: Opcode) void {
@@ -39,7 +42,16 @@ pub const Opcode = enum(u8) {
 
     pub fn hasOperand(opcode: Opcode) bool {
         return switch (opcode) {
-            .op_constant, .op_define_global, .op_get_global, .op_set_global, .op_get_local, .op_set_local => true,
+            .op_constant,
+            .op_define_global,
+            .op_get_global,
+            .op_set_global,
+            .op_get_local,
+            .op_set_local,
+            .op_jump,
+            .op_jump_if_false,
+            .op_loop,
+            => true,
             else => false,
         };
     }
@@ -47,6 +59,16 @@ pub const Opcode = enum(u8) {
     pub fn isLocalInstr(opcode: Opcode) bool {
         return switch (opcode) {
             .op_get_local, .op_set_local => true,
+            else => false,
+        };
+    }
+
+    pub fn isJumpInstr(opcode: Opcode) bool {
+        return switch (opcode) {
+            .op_jump,
+            .op_jump_if_false,
+            .op_loop,
+            => true,
             else => false,
         };
     }
@@ -141,6 +163,9 @@ const KEYWORDS = std.StaticStringMap(Opcode).initComptime(.{
     .{ "NOT", .op_not },
     .{ "NEG", .op_negate },
     .{ "PRINT", .op_print },
+    .{ "JUMP", .op_jump },
+    .{ "JUMP_IF_FALSE", .op_jump_if_false },
+    .{ "LOOP", .op_loop },
     .{ "RET", .op_return },
 });
 
@@ -175,13 +200,13 @@ fn scanNumber(src: []u8, curr: *usize) !f64 {
     return try std.fmt.parseFloat(f64, str);
 }
 
-fn scanByte(src: []u8, curr: *usize) !u8 {
+fn scanInt(comptime T: type, src: []u8, curr: *usize) !T {
     const start: usize = curr.*;
     while (curr.* < src.len and isDigit(src[curr.*])) {
         curr.* += 1;
     }
     const str = src[start..curr.*];
-    return try std.fmt.parseInt(u8, str, 0);
+    return try std.fmt.parseInt(T, str, 0);
 }
 
 fn scanString(src: []u8, curr: *usize) ![]u8 {
@@ -210,9 +235,14 @@ pub fn load(chunk: *Chunk, gc: *GC, src: []u8) !void {
 
                 curr += 1; // skip space
                 if (opcode.isLocalInstr()) {
-                    const slot = try scanByte(src, &curr);
+                    const slot = try scanInt(u8, src, &curr);
                     try chunk.writeOpcode(opcode);
                     try chunk.writeChunk(slot);
+                } else if (opcode.isJumpInstr()) {
+                    const offset = try scanInt(u16, src, &curr);
+                    try chunk.writeOpcode(opcode);
+                    try chunk.writeChunk(@intCast((offset >> 8) & 0xFF));
+                    try chunk.writeChunk(@intCast(offset & 0xFF));
                 } else if (isDigit(src[curr])) {
                     const num = try scanNumber(src, &curr);
                     try chunk.writeConstInstr(Value.fromNum(num), opcode);
@@ -277,6 +307,13 @@ pub const Chunk = struct {
                     opcode.print();
                     std.debug.print(" {d}\n", .{slot});
                     i += 2;
+                } else if (opcode.isJumpInstr()) {
+                    const upper = @as(u16, self.code.items[i + 1]);
+                    const lower = @as(u16, self.code.items[i + 2]);
+                    const offset: u16 = @intCast((upper << 8) | lower);
+                    opcode.print();
+                    std.debug.print(" {d}\n", .{offset});
+                    i += 3;
                 } else {
                     const constIndex = self.code.items[i + 1];
                     const value: Value = self.constants.items[constIndex];

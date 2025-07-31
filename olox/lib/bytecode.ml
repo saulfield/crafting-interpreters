@@ -86,6 +86,36 @@ let string_of_op op =
   | OP_LOOP i -> Printf.sprintf "LOOP %d" i
   | OP_RET -> "RET"
 
+let op_length op =
+  match op with
+  | OP_CONST_NUM _ -> 2
+  | OP_CONST_STR _ -> 2
+  | OP_NIL -> 1
+  | OP_TRUE -> 1
+  | OP_FALSE -> 1
+  | OP_POP -> 1
+  | OP_GET_LOCAL _ -> 2
+  | OP_SET_LOCAL _ -> 2
+  | OP_GET_GLOBAL _ -> 2
+  | OP_SET_GLOBAL _ -> 2
+  | OP_DEFINE_GLOBAL _ -> 2
+  | OP_EQUAL -> 1
+  | OP_GREATER -> 1
+  | OP_LESS -> 1
+  | OP_ADD -> 1
+  | OP_SUB -> 1
+  | OP_MUL -> 1
+  | OP_DIV -> 1
+  | OP_NOT -> 1
+  | OP_NEG -> 1
+  | OP_PRINT -> 1
+  | OP_JUMP _ -> 3
+  | OP_JUMP_IF_FALSE _ -> 3
+  | OP_LOOP _ -> 3
+  | OP_RET -> 1
+
+let code_length ops = List.fold_left (fun acc op -> acc + op_length op) 0 ops
+
 let compile_literal lit =
   match lit with
   | LIT_number n -> OP_CONST_NUM n
@@ -152,14 +182,14 @@ let rec compile_expr expr =
 and compile_and lhs rhs =
   let lhs_code = compile_expr lhs in
   let rhs_code = [ OP_POP ] @ compile_expr rhs in
-  let jump_code = [ OP_JUMP_IF_FALSE (List.length rhs_code) ] in
+  let jump_code = [ OP_JUMP_IF_FALSE (code_length rhs_code) ] in
   lhs_code @ jump_code @ rhs_code
 
 and compile_or lhs rhs =
   let lhs_code = compile_expr lhs in
   let rhs_code = [ OP_POP ] @ compile_expr rhs in
-  let jump_false = [ OP_JUMP_IF_FALSE 1 ] in
-  let jump_true = [ OP_JUMP (List.length rhs_code) ] in
+  let jump_true = [ OP_JUMP (code_length rhs_code) ] in
+  let jump_false = [ OP_JUMP_IF_FALSE (code_length jump_true) ] in
   lhs_code @ jump_false @ jump_true @ rhs_code
 
 let add_local name =
@@ -223,24 +253,26 @@ and compile_if cond then_stmt else_stmt =
   let else_code =
     match else_stmt with
     | Some stmt -> [ OP_POP ] @ compile_stmt stmt
-    | None -> [ OP_POP ]
+    | None -> []
   in
   let else_jump =
     match else_stmt with
-    | Some _ -> [ OP_JUMP (List.length else_code) ]
+    | Some _ -> [ OP_JUMP (code_length else_code) ]
     | None -> []
   in
   let then_jump =
-    [ OP_JUMP_IF_FALSE (List.length then_code + List.length else_jump) ]
+    [ OP_JUMP_IF_FALSE (code_length then_code + code_length else_jump) ]
   in
   cond_code @ then_jump @ then_code @ else_jump @ else_code
 
 and compile_while cond body =
   let cond_code = compile_expr cond in
   let body_code = [ OP_POP ] @ compile_stmt body in
-  let jump_end = [ OP_JUMP_IF_FALSE (List.length body_code + 1) ] in
   let jump_start =
-    [ OP_LOOP (List.length body_code + 2 + List.length cond_code) ]
+    [ OP_LOOP (code_length body_code + 6 + code_length cond_code) ]
+  in
+  let jump_end =
+    [ OP_JUMP_IF_FALSE (code_length body_code + code_length jump_start) ]
   in
   cond_code @ jump_end @ body_code @ jump_start @ [ OP_POP ]
 
