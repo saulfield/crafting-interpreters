@@ -1,16 +1,8 @@
 const std = @import("std");
+const ozlox = @import("ozlox.zig");
+const Object = ozlox.Object;
 
 pub const GC = struct {
-    pub const ObjType = enum {
-        str,
-    };
-
-    pub const Object = struct {
-        data: union(ObjType) {
-            str: []u8,
-        },
-    };
-
     allocator: std.mem.Allocator,
     objects: std.ArrayList(*Object),
     strings: std.StringHashMap(*Object),

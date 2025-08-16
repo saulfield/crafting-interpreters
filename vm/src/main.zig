@@ -2,11 +2,9 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const stdout = std.io.getStdOut().writer();
 
-const GC = @import("gc.zig").GC;
-const VM = @import("vm.zig").VM;
-const Bytecode = @import("bytecode.zig");
-const Chunk = Bytecode.Chunk;
-const Compiler = Bytecode.Compiler;
+const ozlox = @import("ozlox.zig");
+const GC = ozlox.GC;
+const BytecodeReader = ozlox.BytecodeReader;
 
 fn runFile(allocator: Allocator, path: []const u8) !void {
     // read bytecode text file
@@ -20,9 +18,9 @@ fn runFile(allocator: Allocator, path: []const u8) !void {
     defer gc.deinit();
 
     // load bytecode
-    var compiler = Compiler.init(allocator, &gc, src);
-    defer compiler.deinit();
-    var chunk = try compiler.loadChunk();
+    var reader = BytecodeReader.init(allocator, &gc, src);
+    defer reader.deinit();
+    var chunk = try reader.loadChunk();
     chunk.disassemble();
 
     // // run interpreter
