@@ -1,11 +1,11 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const GC = @import("gc.zig").GC;
-const Bytecode = @import("bytecode.zig");
-const Chunk = Bytecode.Chunk;
-const Value = Bytecode.Value;
-const Opcode = Bytecode.Opcode;
+const ozlox = @import("ozlox.zig");
+const GC = ozlox.GC;
+const Chunk = ozlox.Chunk;
+const Value = ozlox.Value;
+const Opcode = ozlox.Opcode;
 
 pub const InterpretResult = enum {
     ok,
@@ -205,6 +205,7 @@ pub const VM = struct {
                 .op_return => {
                     return .ok;
                 },
+                else => unreachable,
             }
         }
         unreachable;

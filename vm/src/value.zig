@@ -9,9 +9,9 @@ const Object = ozlox.Object;
 const ObjType = ozlox.ObjType;
 
 pub const Value = union(enum) {
+    nil,
     bool: bool,
     num: f64,
-    nil: bool, // TODO: find a more idiomatic way for doing this
     obj: *Object,
 
     pub fn fromNum(num: f64) Value {
@@ -23,7 +23,7 @@ pub const Value = union(enum) {
     }
 
     pub fn fromNil() Value {
-        return .{ .nil = true };
+        return .nil;
     }
 
     pub fn fromObj(obj: *Object) Value {
@@ -70,6 +70,7 @@ pub const Value = union(enum) {
             .obj => |obj| {
                 switch (obj.*.data) {
                     .str => |s| std.debug.print("\"{s}\"", .{s}),
+                    // .func => |func| std.debug.print("<fn {s}>", .{func.*.name}),
                 }
             },
         }

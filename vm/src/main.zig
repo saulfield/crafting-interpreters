@@ -3,8 +3,9 @@ const Allocator = std.mem.Allocator;
 const stdout = std.io.getStdOut().writer();
 
 const ozlox = @import("ozlox.zig");
+const Compiler = ozlox.Compiler;
 const GC = ozlox.GC;
-const BytecodeReader = ozlox.BytecodeReader;
+const VM = ozlox.VM;
 
 fn runFile(allocator: Allocator, path: []const u8) !void {
     // read bytecode text file
@@ -18,16 +19,15 @@ fn runFile(allocator: Allocator, path: []const u8) !void {
     defer gc.deinit();
 
     // load bytecode
-    var reader = BytecodeReader.init(allocator, &gc, src);
-    defer reader.deinit();
-    var chunk = try reader.loadChunk();
+    var compiler = Compiler.init(&gc, src);
+    var chunk = try compiler.loadChunk(false);
     chunk.disassemble();
 
-    // // run interpreter
-    // var vm = VM.init(allocator, &gc);
-    // defer vm.deinit();
-    // const result = try vm.interpret(&chunk);
-    // _ = result;
+    // run interpreter
+    var vm = VM.init(allocator, &gc);
+    defer vm.deinit();
+    const result = try vm.interpret(chunk);
+    _ = result;
 }
 
 pub fn main() !void {

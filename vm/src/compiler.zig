@@ -2,7 +2,6 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const isDigit = std.ascii.isDigit;
-const activeTag = std.meta.activeTag;
 
 const ozlox = @import("ozlox.zig");
 const Value = ozlox.Value;
@@ -40,29 +39,17 @@ const KEYWORDS = std.StaticStringMap(Opcode).initComptime(.{
     .{ "RET", .op_return },
 });
 
-pub const BytecodeReader = struct {
-    allocator: Allocator,
+pub const Compiler = struct {
     gc: *GC,
-    chunks: ArrayList(*Chunk),
     curr: usize,
     src: []const u8,
 
-    pub fn init(allocator: Allocator, gc: *GC, src: []const u8) BytecodeReader {
+    pub fn init(gc: *GC, src: []const u8) Compiler {
         return .{
-            .allocator = allocator,
             .gc = gc,
-            .chunks = ArrayList(*Chunk).init(allocator),
             .src = src,
             .curr = 0,
         };
-    }
-
-    pub fn deinit(self: *BytecodeReader) void {
-        for (self.chunks.items) |chunk| {
-            chunk.deinit();
-            self.allocator.destroy(chunk);
-        }
-        self.chunks.deinit();
     }
 
     fn isAlpha(c: u8) bool {
@@ -72,7 +59,7 @@ pub const BytecodeReader = struct {
         };
     }
 
-    fn scanOpcode(self: *BytecodeReader) Opcode {
+    fn scanOpcode(self: *Compiler) Opcode {
         const start: usize = self.curr - 1;
         while (self.curr < self.src.len and isAlpha(self.src[self.curr])) {
             self.curr += 1;
@@ -81,7 +68,7 @@ pub const BytecodeReader = struct {
         return KEYWORDS.get(str).?;
     }
 
-    fn scanNumber(self: *BytecodeReader) !f64 {
+    fn scanNumber(self: *Compiler) !f64 {
         const start: usize = self.curr;
         while (self.curr < self.src.len and isDigit(self.src[self.curr])) {
             self.curr += 1;
@@ -96,7 +83,7 @@ pub const BytecodeReader = struct {
         return try std.fmt.parseFloat(f64, str);
     }
 
-    fn scanInt(self: *BytecodeReader, comptime T: type) !T {
+    fn scanInt(self: *Compiler, comptime T: type) !T {
         const start: usize = self.curr;
         while (self.curr < self.src.len and isDigit(self.src[self.curr])) {
             self.curr += 1;
@@ -105,7 +92,7 @@ pub const BytecodeReader = struct {
         return try std.fmt.parseInt(T, str, 0);
     }
 
-    fn scanString(self: *BytecodeReader) []const u8 {
+    fn scanString(self: *Compiler) []const u8 {
         const start: usize = self.curr;
         while (self.curr < self.src.len and self.src[self.curr] != '"') {
             self.curr += 1;
@@ -116,10 +103,15 @@ pub const BytecodeReader = struct {
     }
 
     // Reads a sequence of bytecode instructions into a new chunk
-    pub fn loadChunk(self: *BytecodeReader) !*Chunk {
-        var chunk = try self.allocator.create(Chunk);
-        chunk.from_alloc(self.allocator);
-        try self.chunks.append(chunk);
+    pub fn loadChunk(self: *Compiler, isFunction: bool) !*Chunk {
+        _ = isFunction;
+        // const funObj = try self.gc.createFuncObject();
+        // var funChunk = funObj.data.func.chunk;
+        // var chunk = &funChunk;
+        // var chunk = funObj.*.data.func.*.chunk;
+
+        var chunk = try self.gc.createChunk();
+
         while (self.curr < self.src.len) {
             const c = self.src[self.curr];
             self.curr += 1;
