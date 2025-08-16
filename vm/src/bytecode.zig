@@ -32,7 +32,10 @@ pub const Opcode = enum(u8) {
     op_jump,
     op_jump_if_false,
     op_loop,
+    op_call,
     op_return,
+    op_func_begin,
+    op_func_end,
 
     pub fn print(opcode: Opcode) void {
         var buf: [16]u8 = undefined;
@@ -42,6 +45,8 @@ pub const Opcode = enum(u8) {
 
     pub fn hasOperand(opcode: Opcode) bool {
         return switch (opcode) {
+            .op_func_begin,
+            .op_func_end,
             .op_constant,
             .op_define_global,
             .op_get_global,
@@ -51,14 +56,15 @@ pub const Opcode = enum(u8) {
             .op_jump,
             .op_jump_if_false,
             .op_loop,
+            .op_call,
             => true,
             else => false,
         };
     }
 
-    pub fn isLocalInstr(opcode: Opcode) bool {
+    pub fn isLocalOrCallInstr(opcode: Opcode) bool {
         return switch (opcode) {
-            .op_get_local, .op_set_local => true,
+            .op_get_local, .op_set_local, .op_call => true,
             else => false,
         };
     }
@@ -143,6 +149,8 @@ pub const Value = union(enum) {
 };
 
 const KEYWORDS = std.StaticStringMap(Opcode).initComptime(.{
+    .{ "FUNC_BEGIN", .op_func_begin },
+    .{ "FUNC_END", .op_func_end },
     .{ "CONST", .op_constant },
     .{ "PUSH_NIL", .op_nil },
     .{ "PUSH_TRUE", .op_true },
@@ -166,99 +174,148 @@ const KEYWORDS = std.StaticStringMap(Opcode).initComptime(.{
     .{ "JUMP", .op_jump },
     .{ "JUMP_IF_FALSE", .op_jump_if_false },
     .{ "LOOP", .op_loop },
+    .{ "CALL", .op_call },
     .{ "RET", .op_return },
 });
 
-fn isAlpha(c: u8) bool {
-    return switch (c) {
-        'A'...'Z', 'a'...'z', '_' => true,
-        else => false,
-    };
-}
+pub const Compiler = struct {
+    allocator: Allocator,
+    gc: *GC,
+    chunks: ArrayList(*Chunk),
+    curr: usize,
+    src: []const u8,
 
-fn scanOpcode(src: []u8, curr: *usize) Opcode {
-    const start: usize = curr.* - 1;
-    while (curr.* < src.len and isAlpha(src[curr.*])) {
-        curr.* += 1;
+    pub fn init(allocator: Allocator, gc: *GC, src: []const u8) Compiler {
+        return .{
+            .allocator = allocator,
+            .gc = gc,
+            .chunks = ArrayList(*Chunk).init(allocator),
+            .src = src,
+            .curr = 0,
+        };
     }
-    const str = src[start..curr.*];
-    return KEYWORDS.get(str).?;
-}
 
-fn scanNumber(src: []u8, curr: *usize) !f64 {
-    const start: usize = curr.*;
-    while (curr.* < src.len and isDigit(src[curr.*])) {
-        curr.* += 1;
-    }
-    if (src[curr.*] == '.') {
-        curr.* += 1;
-        while (curr.* < src.len and isDigit(src[curr.*])) {
-            curr.* += 1;
+    pub fn deinit(self: *Compiler) void {
+        for (self.chunks.items) |chunk| {
+            chunk.deinit();
+            self.allocator.destroy(chunk);
         }
+        self.chunks.deinit();
     }
-    const str = src[start..curr.*];
-    return try std.fmt.parseFloat(f64, str);
-}
 
-fn scanInt(comptime T: type, src: []u8, curr: *usize) !T {
-    const start: usize = curr.*;
-    while (curr.* < src.len and isDigit(src[curr.*])) {
-        curr.* += 1;
+    fn isAlpha(c: u8) bool {
+        return switch (c) {
+            'A'...'Z', 'a'...'z', '_' => true,
+            else => false,
+        };
     }
-    const str = src[start..curr.*];
-    return try std.fmt.parseInt(T, str, 0);
-}
 
-fn scanString(src: []u8, curr: *usize) ![]u8 {
-    const start: usize = curr.*;
-    while (curr.* < src.len and src[curr.*] != '"') {
-        curr.* += 1;
-    }
-    const str = src[start..curr.*];
-    curr.* += 1;
-    return str;
-}
-
-pub fn load(chunk: *Chunk, gc: *GC, src: []u8) !void {
-    var curr: usize = 0;
-    while (curr < src.len) {
-        const c = src[curr];
-        curr += 1;
-        switch (c) {
-            ' ', '\n' => {},
-            'A'...'Z' => {
-                const opcode = scanOpcode(src, &curr);
-                if (!opcode.hasOperand()) {
-                    try chunk.writeOpcode(opcode);
-                    continue;
-                }
-
-                curr += 1; // skip space
-                if (opcode.isLocalInstr()) {
-                    const slot = try scanInt(u8, src, &curr);
-                    try chunk.writeOpcode(opcode);
-                    try chunk.writeChunk(slot);
-                } else if (opcode.isJumpInstr()) {
-                    const offset = try scanInt(u16, src, &curr);
-                    try chunk.writeOpcode(opcode);
-                    try chunk.writeChunk(@intCast((offset >> 8) & 0xFF));
-                    try chunk.writeChunk(@intCast(offset & 0xFF));
-                } else if (isDigit(src[curr])) {
-                    const num = try scanNumber(src, &curr);
-                    try chunk.writeConstInstr(Value.fromNum(num), opcode);
-                } else {
-                    std.debug.assert(src[curr] == '"');
-                    curr += 1;
-                    const str = try scanString(src, &curr);
-                    const gcStr = try gc.allocAndCopyString(str);
-                    const strObject = try gc.createStrObject(gcStr);
-                    try chunk.writeConstInstr(Value.fromObj(strObject), opcode);
-                }
-            },
-            else => return error.UnexpectedCharacter,
+    fn scanOpcode(self: *Compiler) Opcode {
+        const start: usize = self.curr - 1;
+        while (self.curr < self.src.len and isAlpha(self.src[self.curr])) {
+            self.curr += 1;
         }
+        const str = self.src[start..self.curr];
+        return KEYWORDS.get(str).?;
     }
-}
+
+    fn scanNumber(self: *Compiler) !f64 {
+        const start: usize = self.curr;
+        while (self.curr < self.src.len and isDigit(self.src[self.curr])) {
+            self.curr += 1;
+        }
+        if (self.src[self.curr] == '.') {
+            self.curr += 1;
+            while (self.curr < self.src.len and isDigit(self.src[self.curr])) {
+                self.curr += 1;
+            }
+        }
+        const str = self.src[start..self.curr];
+        return try std.fmt.parseFloat(f64, str);
+    }
+
+    fn scanInt(self: *Compiler, comptime T: type) !T {
+        const start: usize = self.curr;
+        while (self.curr < self.src.len and isDigit(self.src[self.curr])) {
+            self.curr += 1;
+        }
+        const str = self.src[start..self.curr];
+        return try std.fmt.parseInt(T, str, 0);
+    }
+
+    fn scanString(self: *Compiler) []const u8 {
+        const start: usize = self.curr;
+        while (self.curr < self.src.len and self.src[self.curr] != '"') {
+            self.curr += 1;
+        }
+        const str = self.src[start..self.curr];
+        self.curr += 1;
+        return str;
+    }
+
+    // Reads a sequence of bytecode instructions into a new chunk
+    pub fn loadChunk(self: *Compiler) !*Chunk {
+        var chunk = try self.allocator.create(Chunk);
+        chunk.from_alloc(self.allocator);
+        try self.chunks.append(chunk);
+        while (self.curr < self.src.len) {
+            const c = self.src[self.curr];
+            self.curr += 1;
+            switch (c) {
+                ' ', '\n' => {},
+                'A'...'Z' => {
+                    const opcode = self.scanOpcode();
+                    if (!opcode.hasOperand()) {
+                        try chunk.writeOpcode(opcode);
+                        continue;
+                    }
+
+                    self.curr += 1; // skip space
+                    switch (opcode) {
+                        .op_func_begin => {
+                            self.curr += 1;
+                            const name = self.scanString();
+                            self.curr += 1;
+                            const arity = try self.scanInt(u8);
+                            _ = name;
+                            _ = arity;
+                            // const innerChunk = self.loadChunk();
+                            continue;
+                        },
+                        .op_func_end => {
+                            // return &chunk;
+                            continue;
+                        },
+                        else => {},
+                    }
+
+                    if (opcode.isLocalOrCallInstr()) {
+                        const arg = try self.scanInt(u8);
+                        try chunk.writeOpcode(opcode);
+                        try chunk.writeChunk(arg);
+                    } else if (opcode.isJumpInstr()) {
+                        const offset = try self.scanInt(u16);
+                        try chunk.writeOpcode(opcode);
+                        try chunk.writeChunk(@intCast((offset >> 8) & 0xFF));
+                        try chunk.writeChunk(@intCast(offset & 0xFF));
+                    } else if (isDigit(self.src[self.curr])) {
+                        const num = try self.scanNumber();
+                        try chunk.writeConstInstr(Value.fromNum(num), opcode);
+                    } else {
+                        std.debug.assert(self.src[self.curr] == '"');
+                        self.curr += 1;
+                        const str = self.scanString();
+                        const gcStr = try self.gc.allocAndCopyString(str);
+                        const strObject = try self.gc.createStrObject(gcStr);
+                        try chunk.writeConstInstr(Value.fromObj(strObject), opcode);
+                    }
+                },
+                else => return error.UnexpectedCharacter,
+            }
+        }
+        return chunk;
+    }
+};
 
 pub const Chunk = struct {
     code: ArrayList(u8),
@@ -269,6 +326,11 @@ pub const Chunk = struct {
             .code = ArrayList(u8).init(allocator),
             .constants = ArrayList(Value).init(allocator),
         };
+    }
+
+    pub fn from_alloc(self: *Chunk, allocator: Allocator) void {
+        self.code = ArrayList(u8).init(allocator);
+        self.constants = ArrayList(Value).init(allocator);
     }
 
     pub fn deinit(self: *Chunk) void {
@@ -286,7 +348,7 @@ pub const Chunk = struct {
         try self.writeChunk(index);
     }
 
-    fn writeChunk(self: *Chunk, byte: u8) !void {
+    pub fn writeChunk(self: *Chunk, byte: u8) !void {
         try self.code.append(byte);
     }
 
@@ -302,10 +364,10 @@ pub const Chunk = struct {
             const byte = self.code.items[i];
             const opcode: Opcode = @enumFromInt(byte);
             if (opcode.hasOperand()) {
-                if (opcode.isLocalInstr()) {
-                    const slot = self.code.items[i + 1];
+                if (opcode.isLocalOrCallInstr()) {
+                    const arg = self.code.items[i + 1];
                     opcode.print();
-                    std.debug.print(" {d}\n", .{slot});
+                    std.debug.print(" {d}\n", .{arg});
                     i += 2;
                 } else if (opcode.isJumpInstr()) {
                     const upper = @as(u16, self.code.items[i + 1]);
@@ -315,10 +377,11 @@ pub const Chunk = struct {
                     std.debug.print(" {d}\n", .{offset});
                     i += 3;
                 } else {
-                    const constIndex = self.code.items[i + 1];
-                    const value: Value = self.constants.items[constIndex];
                     opcode.print();
                     std.debug.print(" ", .{});
+
+                    const constIndex = self.code.items[i + 1];
+                    const value: Value = self.constants.items[constIndex];
                     value.print();
                     std.debug.print("\n", .{});
                     i += 2;

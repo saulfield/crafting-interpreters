@@ -40,7 +40,7 @@ pub const GC = struct {
         return object;
     }
 
-    pub fn allocAndCopyString(self: *GC, str: []u8) ![]u8 {
+    pub fn allocAndCopyString(self: *GC, str: []const u8) ![]u8 {
         return try self.allocator.dupe(u8, str);
     }
 

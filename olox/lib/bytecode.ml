@@ -31,6 +31,8 @@ let end_scope () =
   pop_count
 
 type bytecode_op =
+  | OP_FUNC_BEGIN of string * int
+  | OP_FUNC_END
   | OP_CONST_NUM of float
   | OP_CONST_STR of string
   | OP_NIL
@@ -55,11 +57,15 @@ type bytecode_op =
   | OP_JUMP of int
   | OP_JUMP_IF_FALSE of int
   | OP_LOOP of int
+  | OP_CALL of int
   | OP_RET
 [@@deriving show]
 
 let string_of_op op =
   match op with
+  | OP_FUNC_BEGIN (name, arity) ->
+      Printf.sprintf "FUNC_BEGIN \"%s\" %d" name arity
+  | OP_FUNC_END -> "FUNC_END"
   | OP_CONST_NUM f -> Printf.sprintf "CONST %g" f
   | OP_CONST_STR s -> Printf.sprintf "CONST \"%s\"" s
   | OP_NIL -> "PUSH_NIL"
@@ -84,10 +90,15 @@ let string_of_op op =
   | OP_JUMP i -> Printf.sprintf "JUMP %d" i
   | OP_JUMP_IF_FALSE i -> Printf.sprintf "JUMP_IF_FALSE %d" i
   | OP_LOOP i -> Printf.sprintf "LOOP %d" i
+  | OP_CALL i -> Printf.sprintf "CALL %d" i
   | OP_RET -> "RET"
 
 let op_length op =
   match op with
+  (* These are special instructions that will get rewritten to a single CONST for the function object *)
+  | OP_FUNC_BEGIN _ -> 2
+  | OP_FUNC_END -> 0
+  (* Normal instructions *)
   | OP_CONST_NUM _ -> 2
   | OP_CONST_STR _ -> 2
   | OP_NIL -> 1
@@ -112,6 +123,7 @@ let op_length op =
   | OP_JUMP _ -> 3
   | OP_JUMP_IF_FALSE _ -> 3
   | OP_LOOP _ -> 3
+  | OP_CALL _ -> 2
   | OP_RET -> 1
 
 let code_length ops = List.fold_left (fun acc op -> acc + op_length op) 0 ops
@@ -176,8 +188,12 @@ let rec compile_expr expr =
       match op with
       | LOGOP_and -> compile_and lhs rhs
       | LOGOP_or -> compile_or lhs rhs)
-  (* | EXPR_Call (callee_expr, arg_exprs) -> failwith "" *)
-  | _ -> failwith ("Unimplemented expr" ^ show_expr expr)
+  | EXPR_Call (callee_expr, arg_exprs) ->
+      let callee = compile_expr callee_expr in
+      let args =
+        List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arg_exprs
+      in
+      callee @ args @ [ OP_CALL (List.length arg_exprs) ]
 
 and compile_and lhs rhs =
   let lhs_code = compile_expr lhs in
@@ -233,19 +249,45 @@ let rec compile_stmt stmt =
   | STMT_Expression expr -> compile_expr expr @ [ OP_POP ]
   | STMT_VarDecl (name, init_expr) -> compile_var_decl name init_expr
   | STMT_Block stmts ->
-      let _ = begin_scope () in
-      let code =
-        List.fold_left (fun acc stmt -> acc @ compile_stmt stmt) [] stmts
-      in
+      let () = begin_scope () in
+      let code = compile_stmts stmts in
       let pop_count = end_scope () in
       let pop_instrs = compile_pops pop_count in
       code @ pop_instrs
   | STMT_If (cond, then_stmt, else_stmt) -> compile_if cond then_stmt else_stmt
   | STMT_While (cond, body) -> compile_while cond body
-  (* | STMT_Fun (_, _, _ -> _ *)
-  (* | STMT_Return -> _ *)
-  (* | STMT_Break -> _ *)
-  | _ -> failwith ("Unimplemented stmt" ^ show_stmt stmt)
+  | STMT_Fun (name, params, body) -> compile_fun_decl name params body
+  | STMT_Return expr ->
+      let code =
+        match expr with
+        | Some e -> compile_expr e
+        | None -> []
+      in
+      code @ [ OP_RET ]
+  | STMT_Break -> failwith "Break statements not supported."
+
+and compile_fun_decl name params body =
+  declare name;
+  define name;
+  begin_scope ();
+  let begin_code = [ OP_FUNC_BEGIN (name, List.length params) ] in
+  let params_code =
+    List.fold_left
+      (fun acc param -> acc @ compile_var_decl param None)
+      [] params
+  in
+  let body_code = compile_stmts body in
+  let end_code = [ OP_FUNC_END ] in
+  let _ = end_scope () in
+  let define_code =
+    match global_cs.depth with
+    | 0 -> [ OP_DEFINE_GLOBAL name ]
+    | _ -> []
+  in
+  begin_code @ params_code @ body_code @ end_code @ define_code
+
+and compile_stmts stmts =
+  List.fold_left (fun acc stmt -> acc @ compile_stmt stmt) [] stmts
 
 and compile_if cond then_stmt else_stmt =
   let cond_code = compile_expr cond in
@@ -276,14 +318,7 @@ and compile_while cond body =
   in
   cond_code @ jump_end @ body_code @ jump_start @ [ OP_POP ]
 
-let compile ast =
-  let rec step ops stmts =
-    match stmts with
-    | [] -> ops @ [ OP_RET ]
-    | stmt :: rest -> ops @ step (compile_stmt stmt) rest
-  in
-  step [] ast
-
+let compile ast = compile_stmts ast @ [ OP_RET ]
 let emit_op ch op = Printf.fprintf ch "%s\n" (string_of_op op)
 
 let emit ops =
