@@ -17,15 +17,6 @@ pub const Chunk = struct {
         };
     }
 
-    pub fn create(allocator: Allocator) !*Chunk {
-        const chunk = try allocator.create(Chunk);
-        chunk.* = .{
-            .code = ArrayList(u8).init(allocator),
-            .constants = ArrayList(Value).init(allocator),
-        };
-        return chunk;
-    }
-
     pub fn deinit(self: *Chunk) void {
         self.code.deinit();
         self.constants.deinit();

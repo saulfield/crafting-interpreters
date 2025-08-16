@@ -105,13 +105,8 @@ pub const Compiler = struct {
     // Reads a sequence of bytecode instructions into a new chunk
     pub fn loadChunk(self: *Compiler, isFunction: bool) !*Chunk {
         _ = isFunction;
-        // const funObj = try self.gc.createFuncObject();
-        // var funChunk = funObj.data.func.chunk;
-        // var chunk = &funChunk;
-        // var chunk = funObj.*.data.func.*.chunk;
-
-        var chunk = try self.gc.createChunk();
-
+        const funObj = try self.gc.createFuncObject();
+        var chunk = &funObj.func.chunk;
         while (self.curr < self.src.len) {
             const c = self.src[self.curr];
             self.curr += 1;

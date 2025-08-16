@@ -6,13 +6,12 @@ const activeTag = std.meta.activeTag;
 
 const ozlox = @import("ozlox.zig");
 const Object = ozlox.Object;
-const ObjType = ozlox.ObjType;
 
 pub const Value = union(enum) {
     nil,
     bool: bool,
     num: f64,
-    obj: *Object,
+    obj: Object,
 
     pub fn fromNum(num: f64) Value {
         return .{ .num = num };
@@ -26,7 +25,7 @@ pub const Value = union(enum) {
         return .nil;
     }
 
-    pub fn fromObj(obj: *Object) Value {
+    pub fn fromObj(obj: Object) Value {
         return .{ .obj = obj };
     }
 
@@ -39,7 +38,10 @@ pub const Value = union(enum) {
 
     pub fn isStr(self: Value) bool {
         return switch (self) {
-            .obj => |obj| activeTag(obj.data) == ObjType.str,
+            .obj => |obj| switch (obj) {
+                .str => true,
+                else => false,
+            },
             else => false,
         };
     }
@@ -58,7 +60,10 @@ pub const Value = union(enum) {
             .bool => a.bool == b.bool,
             .num => a.num == b.num,
             .nil => true,
-            .obj => a.obj == b.obj,
+            .obj => |obj| switch (obj) {
+                .str => a.obj.str.ptr == b.obj.str.ptr,
+                .func => false, // TODO
+            },
         };
     }
 
@@ -68,9 +73,9 @@ pub const Value = union(enum) {
             .num => |num| std.debug.print("{d}", .{num}),
             .nil => std.debug.print("nil", .{}),
             .obj => |obj| {
-                switch (obj.*.data) {
+                switch (obj) {
                     .str => |s| std.debug.print("\"{s}\"", .{s}),
-                    // .func => |func| std.debug.print("<fn {s}>", .{func.*.name}),
+                    .func => |func| std.debug.print("<fn {s}>", .{func.*.name}),
                 }
             },
         }

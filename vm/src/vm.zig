@@ -125,7 +125,7 @@ pub const VM = struct {
                     self.stack[slot] = self.peek(0);
                 },
                 .op_get_global => {
-                    const name = self.readConst().obj.data.str;
+                    const name = self.readConst().obj.str;
                     if (self.globals.get(name)) |value| {
                         self.push(value);
                     } else {
@@ -135,7 +135,7 @@ pub const VM = struct {
                     }
                 },
                 .op_set_global => {
-                    const name = self.readConst().obj.data.str;
+                    const name = self.readConst().obj.str;
                     if (self.globals.get(name) == null) {
                         // TODO: print name in error message
                         self.runtimeError("Undefined variable.");
@@ -144,7 +144,7 @@ pub const VM = struct {
                     try self.globals.put(name, self.peek(0));
                 },
                 .op_define_global => {
-                    const name = self.readConst().obj.data.str;
+                    const name = self.readConst().obj.str;
                     try self.globals.put(name, self.peek(0));
                     _ = self.pop();
                 },
@@ -161,8 +161,8 @@ pub const VM = struct {
                         const a = self.pop().num;
                         self.push(Value.fromNum(a + b));
                     } else if (self.peek(0).isStr() and self.peek(1).isStr()) {
-                        const b = self.pop().obj.data.str;
-                        const a = self.pop().obj.data.str;
+                        const b = self.pop().obj.str;
+                        const a = self.pop().obj.str;
                         const newStr = try self.gc.allocString(a.len + b.len);
                         std.mem.copyForwards(u8, newStr, a);
                         std.mem.copyForwards(u8, newStr[a.len..], b);
