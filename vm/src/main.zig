@@ -20,13 +20,13 @@ fn runFile(allocator: Allocator, path: []const u8) !void {
 
     // load bytecode
     var compiler = Compiler.init(&gc, src);
-    var chunk = try compiler.loadChunk(false);
-    chunk.disassemble();
+    const functionObj = try compiler.compile(false);
+    // functionObj.chunk.disassemble();
 
     // run interpreter
     var vm = VM.init(allocator, &gc);
     defer vm.deinit();
-    const result = try vm.interpret(chunk);
+    const result = try vm.run(functionObj);
     _ = result;
 }
 

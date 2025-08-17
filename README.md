@@ -1,12 +1,12 @@
 # Crafting Interpreters
 
-## Dependencies
+# Dependencies
 
 - OCaml (for the tree-walk interpreter and bytecode compiler)
 - Zig (for the bytecode VM)
 - [Optional] Python and [uv](https://docs.astral.sh/uv) for the test suite runner
 
-## Run
+# Run
 
 1. Install `just` from https://just.systems/man/en/
 2. Invoke a command with `just <command>`
@@ -38,9 +38,41 @@ just vm
 just ozlox examples/operators.lox
 ```
 
-## Benchmarking
+# Benchmarking
 
-### Scanner (100MB file of random characters)
+## Fibonacci
+
+```
+fun fib(n) {
+  if (n < 2) return n;
+  return fib(n - 1) + fib(n - 2); 
+}
+print fib(40);
+```
+
+### olox (tree-walk interpreter)
+
+```sh
+$ time just olox examples/fib.lox
+1.02334e+08
+
+real	2m24.888s
+user	2m24.765s
+sys	0m0.045s
+```
+
+### ozlox (OCaml bytecode compiler + Zig bytecode VM)
+```sh
+time just ozlox examples/fib.lox
+102334155
+
+real	0m30.931s
+user	0m30.842s
+sys	0m0.064s
+```
+
+
+## Scanner (100MB file of random characters)
 
 ```sh
 hyperfine \ 

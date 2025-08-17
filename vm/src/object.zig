@@ -3,7 +3,7 @@ const Chunk = ozlox.Chunk;
 
 pub const FunctionObj = struct {
     arity: u8,
-    name: []u8,
+    name: []const u8,
     chunk: Chunk,
 };
 

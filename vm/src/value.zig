@@ -75,7 +75,13 @@ pub const Value = union(enum) {
             .obj => |obj| {
                 switch (obj) {
                     .str => |s| std.debug.print("\"{s}\"", .{s}),
-                    .func => |func| std.debug.print("<fn {s}>", .{func.*.name}),
+                    .func => |func| {
+                        if (func.name.len == 0) {
+                            std.debug.print("<script>", .{});
+                        } else {
+                            std.debug.print("<fn {s}>", .{func.*.name});
+                        }
+                    },
                 }
             },
         }

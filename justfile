@@ -22,6 +22,9 @@ default:
 @vm: vm-build
     ./vm/zig-out/bin/vm "out.byte"
 
+@vm-run:
+    ./vm/zig-out/bin/vm "out.byte"
+
 @ozlox *FILE:
     just compile {{FILE}} && ./vm/zig-out/bin/vm "out.byte"
 

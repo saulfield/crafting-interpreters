@@ -8,6 +8,7 @@ const Value = ozlox.Value;
 const Opcode = ozlox.Opcode;
 const Chunk = ozlox.Chunk;
 const GC = ozlox.GC;
+const FunctionObj = ozlox.FunctionObj;
 
 const KEYWORDS = std.StaticStringMap(Opcode).initComptime(.{
     .{ "FUNC_BEGIN", .op_func_begin },
@@ -102,11 +103,11 @@ pub const Compiler = struct {
         return str;
     }
 
-    // Reads a sequence of bytecode instructions into a new chunk
-    pub fn loadChunk(self: *Compiler, isFunction: bool) !*Chunk {
+    // Reads a sequence of bytecode instructions into a new function object
+    pub fn compile(self: *Compiler, isFunction: bool) !*FunctionObj {
         _ = isFunction;
-        const funObj = try self.gc.createFuncObject();
-        var chunk = &funObj.func.chunk;
+        const obj = try self.gc.createFuncObject();
+        var chunk = &obj.func.chunk;
         while (self.curr < self.src.len) {
             const c = self.src[self.curr];
             self.curr += 1;
@@ -120,22 +121,21 @@ pub const Compiler = struct {
                     }
 
                     self.curr += 1; // skip space
-                    switch (opcode) {
-                        .op_func_begin => {
-                            self.curr += 1;
-                            const name = self.scanString();
-                            self.curr += 1;
-                            const arity = try self.scanInt(u8);
-                            _ = name;
-                            _ = arity;
-                            // const innerChunk = self.loadChunk();
-                            continue;
-                        },
-                        .op_func_end => {
-                            // return &chunk;
-                            continue;
-                        },
-                        else => {},
+                    if (opcode == .op_func_begin) {
+                        self.curr += 1;
+                        const name = self.scanString();
+                        self.curr += 1;
+                        const arity = try self.scanInt(u8);
+                        // _ = name;
+                        // _ = arity;
+
+                        const function = try self.compile(true);
+                        function.*.name = name;
+                        function.*.arity = arity;
+                        try chunk.writeConstInstr(Value.fromObj(.{ .func = function }), .op_constant);
+                        continue;
+                    } else if (opcode == .op_func_end) {
+                        return obj.func;
                     }
 
                     if (opcode.isLocalOrCallInstr()) {
@@ -162,6 +162,6 @@ pub const Compiler = struct {
                 else => return error.UnexpectedCharacter,
             }
         }
-        return chunk;
+        return obj.func;
     }
 };

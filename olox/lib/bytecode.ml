@@ -270,11 +270,19 @@ and compile_fun_decl name params body =
   declare name;
   define name;
   begin_scope ();
+  List.iter
+    (fun param ->
+      declare param;
+      define param)
+    params;
   let begin_code = [ OP_FUNC_BEGIN (name, List.length params) ] in
+
+  (* TODO: these shouldn't emit initializers for the params *)
   let params_code =
-    List.fold_left
+    []
+    (* List.fold_left
       (fun acc param -> acc @ compile_var_decl param None)
-      [] params
+      [] params *)
   in
   let body_code = compile_stmts body in
   let end_code = [ OP_FUNC_END ] in
@@ -295,7 +303,7 @@ and compile_if cond then_stmt else_stmt =
   let else_code =
     match else_stmt with
     | Some stmt -> [ OP_POP ] @ compile_stmt stmt
-    | None -> []
+    | None -> [ OP_POP ]
   in
   let else_jump =
     match else_stmt with

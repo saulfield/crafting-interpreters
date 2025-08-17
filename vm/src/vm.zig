@@ -6,6 +6,7 @@ const GC = ozlox.GC;
 const Chunk = ozlox.Chunk;
 const Value = ozlox.Value;
 const Opcode = ozlox.Opcode;
+const FunctionObj = ozlox.FunctionObj;
 
 pub const InterpretResult = enum {
     ok,
@@ -13,23 +14,34 @@ pub const InterpretResult = enum {
     runtime_error,
 };
 
-const STACK_MAX = 256;
+const CallFrame = struct {
+    function: *FunctionObj,
+    ip: usize,
+    slots: []Value,
+};
+
+const FRAMES_MAX = 64;
+const STACK_MAX = 256 * FRAMES_MAX;
 pub const VM = struct {
     gc: *GC,
     sp: usize,
-    ip: usize,
     stack: [STACK_MAX]Value,
-    globals: std.StringHashMap(Value),
+    fp: usize,
+    frames: [FRAMES_MAX]CallFrame,
+    frame: *CallFrame,
     chunk: *Chunk,
+    globals: std.StringHashMap(Value),
 
     pub fn init(allocator: Allocator, gc: *GC) VM {
         return .{
             .gc = gc,
             .sp = 0,
-            .ip = 0,
             .stack = undefined,
-            .globals = std.StringHashMap(Value).init(allocator),
+            .fp = 0,
+            .frames = undefined,
+            .frame = undefined,
             .chunk = undefined,
+            .globals = std.StringHashMap(Value).init(allocator),
         };
     }
 
@@ -52,21 +64,21 @@ pub const VM = struct {
     }
 
     fn readByte(self: *VM) u8 {
-        const byte = self.chunk.*.code.items[self.ip];
-        self.ip += 1;
+        const byte = self.frame.function.chunk.code.items[self.frame.ip];
+        self.frame.ip += 1;
         return byte;
     }
 
     fn readShort(self: *VM) u16 {
-        const upper = @as(u16, self.chunk.*.code.items[self.ip]);
-        const lower = @as(u16, self.chunk.*.code.items[self.ip + 1]);
-        self.ip += 2;
+        const upper = @as(u16, self.frame.function.chunk.code.items[self.frame.ip]);
+        const lower = @as(u16, self.frame.function.chunk.code.items[self.frame.ip + 1]);
+        self.frame.ip += 2;
         return (upper << 8) | lower;
     }
 
     fn readConst(self: *VM) Value {
         const index = self.readByte();
-        return self.chunk.*.constants.items[index];
+        return self.frame.function.chunk.constants.items[index];
     }
 
     fn binOp(self: *VM, comptime T: type, opcode: Opcode) !void {
@@ -100,16 +112,69 @@ pub const VM = struct {
         }
     }
 
+    fn callValue(self: *VM, callee: Value, argCount: u8) bool {
+        switch (callee) {
+            .obj => |obj| {
+                switch (obj) {
+                    .func => |functionObj| {
+                        if (argCount != functionObj.*.arity) {
+                            self.runtimeError("Unexpected number of arguments.");
+                            return false;
+                        }
+
+                        if (self.fp == FRAMES_MAX) {
+                            self.runtimeError("Stack overflow.");
+                            return false;
+                        }
+
+                        self.frame = &self.frames[self.fp];
+                        self.frame.* = .{
+                            .function = functionObj,
+                            .ip = 0,
+                            .slots = self.stack[self.sp - argCount ..],
+                        };
+                        self.fp += 1;
+                        return true;
+                    },
+                    else => {},
+                }
+            },
+            else => {},
+        }
+        self.runtimeError("Can only call functions and classes.");
+        return false;
+    }
+
+    fn printStack(self: *VM) void {
+        for (self.stack[0..self.sp]) |val| {
+            std.debug.print("[", .{});
+            val.print();
+            std.debug.print("]", .{});
+        }
+        // std.debug.print("\n", .{});
+    }
+
     fn runtimeError(self: *VM, message: []const u8) void {
         std.debug.print("{s}\n", .{message});
         self.sp = 0; // reset stack
     }
 
-    pub fn interpret(self: *VM, chunk: *Chunk) !InterpretResult {
-        self.ip = 0;
-        self.chunk = chunk;
+    pub fn run(self: *VM, functionObj: *FunctionObj) !InterpretResult {
+        const scriptFunction = Value.fromObj(.{ .func = functionObj });
+        self.push(scriptFunction);
+        _ = self.callValue(scriptFunction, 0);
         while (true) {
             const opcode: Opcode = @enumFromInt(self.readByte());
+
+            // Tracing
+            // const func = Value.fromObj(.{ .func = self.frame.function });
+            // func.print();
+            // std.debug.print(" ", .{});
+            // opcode.print();
+            // std.debug.print(" ", .{});
+            // self.printStack();
+            // std.debug.print("\n", .{});
+
             switch (opcode) {
                 .op_constant => self.push(self.readConst()),
                 .op_nil => self.push(Value.fromNil()),
@@ -118,11 +183,11 @@ pub const VM = struct {
                 .op_pop => _ = self.pop(),
                 .op_get_local => {
                     const slot = self.readByte();
-                    self.push(self.stack[slot]);
+                    self.push(self.frame.slots[slot]);
                 },
                 .op_set_local => {
                     const slot = self.readByte();
-                    self.stack[slot] = self.peek(0);
+                    self.frame.slots[slot] = self.peek(0);
                 },
                 .op_get_global => {
                     const name = self.readConst().obj.str;
@@ -191,19 +256,34 @@ pub const VM = struct {
                 },
                 .op_jump => {
                     const offset = self.readShort();
-                    self.ip += offset;
+                    self.frame.ip += offset;
                 },
                 .op_jump_if_false => {
                     const offset = self.readShort();
                     if (self.peek(0).isFalsey())
-                        self.ip += offset;
+                        self.frame.ip += offset;
                 },
                 .op_loop => {
                     const offset = self.readShort();
-                    self.ip -= offset;
+                    self.frame.ip -= offset;
+                },
+                .op_call => {
+                    const argCount = self.readByte();
+                    const callee = self.peek(argCount);
+                    if (!self.callValue(callee, argCount))
+                        return .runtime_error;
                 },
                 .op_return => {
-                    return .ok;
+                    const result = self.pop();
+                    self.fp -= 1;
+                    if (self.fp == 0) {
+                        // _ = self.pop();
+                        return .ok;
+                    }
+
+                    self.sp -= self.frame.function.arity + 1;
+                    self.push(result);
+                    self.frame = &self.frames[self.fp - 1];
                 },
                 else => unreachable,
             }
